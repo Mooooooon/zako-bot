@@ -1,3 +1,3 @@
 <template>
-  <PlaceholderPage title="Bots" />
+  <PlaceholderPage title="机器人" />
 </template>

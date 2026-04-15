@@ -1,72 +1,178 @@
 <template>
-  <div class="flex h-full">
-    <aside class="w-56 shrink-0 border-r border-[var(--sidebar-border)] flex flex-col">
-      <div class="flex items-center justify-between px-4 min-h-12 border-b border-[var(--sidebar-border)]">
-        <h2 class="text-sm font-semibold text-[var(--text-primary)] m-0">模型设置</h2>
-        <UButton icon="i-heroicons-plus-20-solid" size="xs" variant="ghost" @click="showAddModal = true" />
-      </div>
-      <div class="flex-1 overflow-y-auto p-2 space-y-0.5">
-        <button
-          v-for="p in platforms"
-          :key="p.id"
-          class="w-full flex items-center gap-2 px-3 py-2 rounded-md text-left text-sm transition-colors cursor-pointer group"
-          :class="selectedId === p.id
-            ? 'bg-[var(--sidebar-active)] text-[var(--accent)] font-semibold'
-            : 'text-[var(--text-secondary)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--text-primary)]'"
-          @click="selectedId = p.id"
-        >
-          <span class="flex-1 truncate">{{ p.name }}</span>
-          <span class="text-[0.65rem] px-1.5 py-0.5 rounded uppercase tracking-wide"
-                :class="selectedId === p.id
-                  ? 'bg-indigo-500/15 text-[var(--accent)]'
-                  : 'bg-[var(--sidebar-hover)] text-[var(--text-secondary)]'"
-          >{{ p.format }}</span>
-          <UButton icon="i-heroicons-x-mark-20-solid" size="xs" variant="ghost"
-                   class="opacity-0 group-hover:opacity-100 transition-opacity"
-                   @click.stop="handleRemove(p.id, p.name)" />
-        </button>
-        <div v-if="platforms.length === 0" class="text-center text-[var(--text-secondary)] text-xs py-8">
-          暂无平台，点击右上角添加
+  <div class="flex h-full gap-6">
+    <aside class="w-72 shrink-0">
+      <UCard variant="subtle" class="flex h-full flex-col">
+        <template #header>
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <h2 class="m-0 text-sm font-semibold text-[var(--text-primary)]">
+                模型设置
+              </h2>
+              <p class="mt-1 text-xs text-[var(--text-secondary)]">
+                管理接口平台与模型列表
+              </p>
+            </div>
+            <UButton
+              icon="i-heroicons-plus-20-solid"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              aria-label="添加平台"
+              @click="showAddModal = true"
+            />
+          </div>
+        </template>
+
+        <div class="flex min-h-0 flex-1 flex-col gap-2">
+          <div v-if="platforms.length" class="min-h-0 flex-1 space-y-1 overflow-y-auto">
+            <UButton
+              v-for="p in platforms"
+              :key="p.id"
+              color="neutral"
+              :variant="selectedId === p.id ? 'soft' : 'ghost'"
+              class="w-full justify-start px-3 py-2"
+              :ui="{
+                base: 'group',
+                leadingIcon: 'hidden',
+                trailingIcon: 'hidden',
+                label: 'flex-1 min-w-0'
+              }"
+              @click="selectedId = p.id"
+            >
+              <span class="flex min-w-0 flex-1 items-center gap-2">
+                <span class="truncate text-sm">{{ p.name }}</span>
+                <UBadge
+                  :label="getFormatLabel(p.format)"
+                  color="neutral"
+                  variant="subtle"
+                />
+              </span>
+
+              <template #trailing>
+                <UButton
+                  icon="i-heroicons-trash-20-solid"
+                  size="xs"
+                  variant="ghost"
+                  color="neutral"
+                  class="opacity-0 transition-opacity group-hover:opacity-100"
+                  :aria-label="`删除 ${p.name}`"
+                  @click.stop="handleRemove(p.id, p.name)"
+                />
+              </template>
+            </UButton>
+          </div>
+
+          <UEmpty
+            v-else
+            icon="i-heroicons-server-stack-20-solid"
+            title="暂无平台"
+            description="点击右上角添加一个模型平台。"
+          />
         </div>
-      </div>
+      </UCard>
     </aside>
-    <div class="flex-1 overflow-y-auto p-6">
-      <template v-if="selectedPlatform">
-        <div class="flex items-center gap-3 mb-6">
-          <h3 class="text-xl font-bold text-[var(--text-primary)] m-0">{{ selectedPlatform.name }}</h3>
-          <span class="text-xs px-2 py-0.5 rounded bg-[var(--sidebar-hover)] text-[var(--text-secondary)] uppercase">{{ selectedPlatform.format }}</span>
-        </div>
-        <div class="flex flex-col gap-4 max-w-md">
-          <UFormField label="API 地址" name="baseUrl">
+
+    <div class="min-w-0 flex-1 overflow-y-auto">
+      <UCard v-if="selectedPlatform" variant="subtle">
+        <template #header>
+          <div class="flex items-center gap-3">
+            <h3 class="m-0 text-xl font-bold text-[var(--text-primary)]">
+              {{ selectedPlatform.name }}
+            </h3>
+            <UBadge
+              :label="getFormatLabel(selectedPlatform.format)"
+              color="neutral"
+              variant="subtle"
+            />
+          </div>
+        </template>
+
+        <div class="flex max-w-xl flex-col gap-4">
+          <UFormField label="接口地址" name="baseUrl">
             <UInput v-model="editBaseUrl" class="w-full" placeholder="https://api.example.com/v1" />
           </UFormField>
-          <UFormField label="API 密钥" name="apiKey">
+
+          <UFormField label="接口密钥" name="apiKey">
             <UInput v-model="editApiKey" :type="showApiKey ? 'text' : 'password'" placeholder="sk-...">
               <template #trailing>
-                <UButton :icon="showApiKey ? 'i-heroicons-eye-slash-20-solid' : 'i-heroicons-eye-20-solid'" size="xs" variant="ghost"
-                         class="mr-1" @click="showApiKey = !showApiKey" />
+                <UButton
+                  :icon="showApiKey ? 'i-heroicons-eye-slash-20-solid' : 'i-heroicons-eye-20-solid'"
+                  size="xs"
+                  variant="ghost"
+                  color="neutral"
+                  class="mr-1"
+                  :aria-label="showApiKey ? '隐藏接口密钥' : '显示接口密钥'"
+                  @click="showApiKey = !showApiKey"
+                />
               </template>
             </UInput>
           </UFormField>
-          <div class="flex items-center gap-2">
-            <UButton label="获取模型列表" :loading="fetchingModels" :disabled="!editBaseUrl || !editApiKey"
-                     @click="handleFetchModels" />
-            <UButton label="保存" variant="outline" @click="handleSave" />
+
+          <div class="flex flex-wrap items-center gap-2">
+            <UButton
+              label="拉取模型列表"
+              :loading="fetchingModels"
+              :disabled="!editBaseUrl || !editApiKey"
+              @click="handleFetchModels"
+            />
+            <UButton
+              label="保存"
+              color="neutral"
+              variant="outline"
+              @click="handleSave"
+            />
           </div>
-          <div v-if="fetchError" class="text-sm text-[var(--color-red)] bg-red-500/10 border border-red-500/20 rounded-md px-3 py-2">
-            {{ fetchError }}
-          </div>
-          <div v-if="selectedPlatform.models.length > 0" class="mt-2">
-            <h4 class="text-sm font-semibold text-[var(--text-primary)] mb-2">可用模型（{{ selectedPlatform.models.length }}）</h4>
-            <div class="flex flex-wrap gap-1.5">
-              <span v-for="m in selectedPlatform.models" :key="m"
-                    class="text-xs font-mono px-2 py-0.5 rounded bg-[var(--sidebar-hover)] text-[var(--text-secondary)]">{{ m }}</span>
+
+          <UAlert
+            v-if="fetchError"
+            color="error"
+            variant="subtle"
+            icon="i-heroicons-x-circle-20-solid"
+            title="拉取模型列表失败"
+            :description="fetchError"
+          />
+
+          <div v-if="selectedPlatform.models.length" class="flex flex-col gap-3">
+            <div class="flex items-center gap-2">
+              <h4 class="m-0 text-sm font-semibold text-[var(--text-primary)]">
+                可用模型
+              </h4>
+              <UBadge
+                :label="String(selectedPlatform.models.length)"
+                color="neutral"
+                variant="subtle"
+                size="lg"
+              />
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <UBadge
+                v-for="m in selectedPlatform.models"
+                :key="m"
+                :label="m"
+                color="neutral"
+                variant="outline"
+                size="xl"
+                class="font-mono"
+              />
             </div>
           </div>
+
+          <UEmpty
+            v-else
+            icon="i-heroicons-circle-stack-20-solid"
+            title="暂无模型列表"
+            description="保存配置后获取一次模型列表。"
+          />
         </div>
-      </template>
-      <div v-else class="flex items-center justify-center h-full text-[var(--text-secondary)] text-sm">
-        选择一个平台查看配置
+      </UCard>
+
+      <div v-else class="flex h-full items-center justify-center">
+        <UEmpty
+          icon="i-heroicons-cpu-chip-20-solid"
+          title="选择一个平台"
+          description="从左侧选择一个平台查看和编辑配置。"
+        />
       </div>
     </div>
 
@@ -74,16 +180,22 @@
       <template #body>
         <div class="space-y-4">
           <UFormField label="平台名称" name="name">
-            <UInput v-model="newPlatformName" class="w-full" placeholder="如：深度求索、硅基流动" @keydown.enter="handleAddPlatform" />
+            <UInput
+              v-model="newPlatformName"
+              class="w-full"
+              placeholder="如：深度求索、硅基流动"
+              @keydown.enter="handleAddPlatform"
+            />
           </UFormField>
-          <UFormField label="接口格式" name="format">
+          <UFormField label="接入格式" name="format">
             <USelect v-model="newPlatformFormat" class="w-full" :items="formatOptions" />
           </UFormField>
         </div>
       </template>
+
       <template #footer>
-        <div class="flex justify-end gap-2 w-full">
-          <UButton label="取消" variant="outline" @click="showAddModal = false" />
+        <div class="flex w-full justify-end gap-2">
+          <UButton label="取消" color="neutral" variant="outline" @click="showAddModal = false" />
           <UButton label="确定" :disabled="!newPlatformName.trim()" @click="handleAddPlatform" />
         </div>
       </template>
@@ -110,16 +222,42 @@ watch(selectedPlatform, (p) => {
     editBaseUrl.value = p.baseUrl
     editApiKey.value = p.apiKey
   }
-})
+  else {
+    editBaseUrl.value = ''
+    editApiKey.value = ''
+    showApiKey.value = false
+  }
+}, { immediate: true })
+
+watch(platforms, (items) => {
+  if (!items.length) {
+    selectedId.value = null
+    return
+  }
+
+  if (!selectedId.value || !items.some(item => item.id === selectedId.value)) {
+    selectedId.value = items[0]?.id ?? null
+  }
+}, { immediate: true })
 
 const showAddModal = ref(false)
 const newPlatformName = ref('')
 const newPlatformFormat = ref<ApiFormat>('openai')
-const formatOptions = [{ label: 'OpenAI 格式', value: 'openai' }]
+const formatOptions = [{ label: 'OpenAI 兼容格式', value: 'openai' }]
+
+function getFormatLabel(format: ApiFormat) {
+  switch (format) {
+    case 'openai':
+      return 'OpenAI 兼容'
+    default:
+      return format
+  }
+}
 
 function handleAddPlatform() {
   const name = newPlatformName.value.trim()
   if (!name) return
+
   const platform = addPlatform(name, newPlatformFormat.value)
   selectedId.value = platform.id
   newPlatformName.value = ''
@@ -129,6 +267,7 @@ function handleAddPlatform() {
 
 function handleSave() {
   if (!selectedId.value) return
+
   updatePlatform(selectedId.value, {
     baseUrl: editBaseUrl.value.trim(),
     apiKey: editApiKey.value.trim(),
@@ -147,15 +286,17 @@ const fetchError = ref('')
 
 async function handleFetchModels() {
   if (!selectedId.value) return
+
   handleSave()
   fetchingModels.value = true
   fetchError.value = ''
+
   try {
     await fetchModels(selectedId.value)
     toast.add({ title: `已获取 ${selectedPlatform.value?.models.length ?? 0} 个模型`, color: 'success' })
   }
   catch (e: any) {
-    fetchError.value = e?.message ?? '获取模型列表失败'
+    fetchError.value = e?.message ?? '拉取模型列表失败'
     toast.add({ title: fetchError.value, color: 'error' })
   }
   finally {

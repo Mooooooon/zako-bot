@@ -1,28 +1,57 @@
 <template>
-  <div class="flex" style="height: calc(100vh - 4rem)">
-    <aside class="w-50 shrink-0 border-r border-[var(--sidebar-border)] p-4">
-      <div class="text-xl font-bold text-[var(--text-primary)] px-3 mb-4">设置</div>
-      <nav class="space-y-0.5">
-        <NuxtLink
-          v-for="item in settingItems"
-          :key="item.to"
-          :to="item.to"
-          class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-[var(--text-secondary)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--text-primary)] transition-colors no-underline"
-          active-class="!bg-[var(--sidebar-active)] !text-[var(--accent)] font-semibold"
-        >
-          <span class="text-lg w-5 inline-flex items-center justify-center" v-html="item.icon" />
-          <span>{{ item.label }}</span>
-        </NuxtLink>
-      </nav>
-    </aside>
-    <div class="flex-1 overflow-y-auto p-6">
+  <div class="flex h-[calc(100vh-4rem)] flex-col gap-4">
+    <UCard variant="subtle">
+      <template #header>
+        <div class="px-1">
+          <h1 class="m-0 text-xl font-bold text-[var(--text-primary)]">
+            设置
+          </h1>
+        </div>
+      </template>
+
+      <UTabs
+        :items="settingItems"
+        :model-value="activeTab"
+        color="neutral"
+        variant="link"
+        class="w-full"
+        :ui="{
+          list: 'w-full justify-start',
+          trigger: 'min-h-10 rounded-md px-3 text-sm',
+          leadingIcon: 'size-4'
+        }"
+        @update:model-value="handleTabChange"
+      />
+    </UCard>
+
+    <div class="min-h-0 flex-1 overflow-y-auto">
       <NuxtPage />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+const route = useRoute()
+
 const settingItems = [
-  { to: '/settings/models', label: '模型设置', icon: '&#129302;' },
-]
+  {
+    label: '模型设置',
+    icon: 'i-heroicons-cpu-chip-20-solid',
+    value: 'models',
+    to: '/settings/models',
+    match: '/settings/models',
+  },
+] as const
+
+const activeTab = computed(() =>
+  settingItems.find(item => route.path.startsWith(item.match))?.value ?? settingItems[0].value,
+)
+
+async function handleTabChange(value: string | number) {
+  const target = settingItems.find(item => item.value === value)
+
+  if (target && route.path !== target.to) {
+    await navigateTo(target.to)
+  }
+}
 </script>

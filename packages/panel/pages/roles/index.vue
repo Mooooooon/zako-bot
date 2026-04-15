@@ -1,3 +1,3 @@
 <template>
-  <PlaceholderPage title="Roles" />
+  <PlaceholderPage title="角色" />
 </template>

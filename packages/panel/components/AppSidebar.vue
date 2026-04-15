@@ -1,182 +1,146 @@
 <template>
-  <aside class="sidebar" :class="{ collapsed }">
-    <div class="sidebar-header">
-      <span class="sidebar-logo">Z</span>
-      <transition name="fade">
-        <span v-if="!collapsed" class="sidebar-brand">ZakoBot</span>
-      </transition>
-      <button class="sidebar-toggle" @click="$emit('toggle')" :title="collapsed ? 'Expand' : 'Collapse'">
-        <span class="toggle-icon" :class="{ rotated: collapsed }">&#x276E;</span>
-      </button>
-    </div>
-    <nav class="sidebar-nav">
-      <NuxtLink
-        v-for="item in navItems"
-        :key="item.to"
-        :to="item.to"
-        class="sidebar-link"
-        active-class="sidebar-link--active"
+  <USidebar
+    class="border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)]"
+    :open="!collapsed"
+    collapsible="icon"
+    rail
+    :ui="{
+      container: 'h-screen',
+      inner: 'bg-[var(--sidebar-bg)] divide-[var(--sidebar-border)]',
+      header: 'px-3 py-4 min-h-0',
+      body: 'px-2 py-3',
+      footer: 'px-2 pb-3 pt-2'
+    }"
+    @update:open="emit('update:collapsed', !$event)"
+  >
+    <template #title="{ state }">
+      <span class="flex min-w-0 items-center gap-2">
+        <span
+          class="flex size-8 shrink-0 items-center justify-center rounded-md bg-[var(--accent)] text-sm font-bold text-white"
+        >
+          Z
+        </span>
+        <span
+          v-if="state !== 'collapsed'"
+          class="truncate text-base font-bold text-[var(--text-primary)]"
+        >
+          ZakoBot
+        </span>
+      </span>
+    </template>
+
+    <template #actions>
+      <UButton
+        icon="i-heroicons-chevron-left-20-solid"
+        color="neutral"
+        variant="ghost"
+        size="xs"
+        aria-label="收起侧边栏"
+        @click="emit('update:collapsed', true)"
+      />
+    </template>
+
+    <template #rail="{ state }">
+      <div
+        v-if="state === 'collapsed'"
+        class="absolute top-4 right-0 z-20 hidden translate-x-1/2 lg:flex"
       >
-        <span class="sidebar-link-icon" v-html="item.icon" />
-        <transition name="fade">
-          <span v-if="!collapsed" class="sidebar-link-label">{{ item.label }}</span>
-        </transition>
-      </NuxtLink>
-    </nav>
-    <div class="sidebar-footer">
-      <NuxtLink to="/settings" class="sidebar-link" active-class="sidebar-link--active">
-        <span class="sidebar-link-icon">&#9881;</span>
-        <transition name="fade">
-          <span v-if="!collapsed" class="sidebar-link-label">设置</span>
-        </transition>
-      </NuxtLink>
-    </div>
-  </aside>
+        <UButton
+          icon="i-heroicons-chevron-right-20-solid"
+          color="neutral"
+          variant="outline"
+          size="xs"
+          square
+          class="mt-1"
+          aria-label="展开侧边栏"
+          @click="emit('update:collapsed', false)"
+        />
+      </div>
+    </template>
+
+    <template #default="{ state }">
+      <UNavigationMenu
+        :key="state"
+        :items="mainItems"
+        color="neutral"
+        orientation="vertical"
+        :collapsed="state === 'collapsed'"
+        tooltip
+        class="w-full"
+        :ui="{
+          link: 'min-h-10 rounded-md px-3 text-sm',
+          linkLeadingIcon: 'size-4',
+          linkLabel: 'truncate'
+        }"
+      />
+    </template>
+
+    <template #footer="{ state }">
+      <UNavigationMenu
+        :key="`footer-${state}`"
+        :items="footerItems"
+        color="neutral"
+        orientation="vertical"
+        :collapsed="state === 'collapsed'"
+        tooltip
+        class="w-full"
+        :ui="{
+          link: 'min-h-10 rounded-md px-3 text-sm',
+          linkLeadingIcon: 'size-4',
+          linkLabel: 'truncate'
+        }"
+      />
+    </template>
+  </USidebar>
 </template>
 
 <script setup lang="ts">
-defineProps<{ collapsed: boolean }>()
-defineEmits<{ toggle: [] }>()
+import type { NavigationMenuItem } from '@nuxt/ui'
 
-const navItems = [
-  { to: '/', label: 'Dashboard', icon: '&#9632;' },
-  { to: '/roles', label: 'Roles', icon: '&#9786;' },
-  { to: '/bots', label: 'Bots', icon: '&#9881;' },
-  { to: '/plugins', label: 'Plugins', icon: '&#10038;' },
-]
+const props = defineProps<{
+  collapsed: boolean
+}>()
+
+const emit = defineEmits<{
+  'update:collapsed': [value: boolean]
+}>()
+
+const route = useRoute()
+const { collapsed } = toRefs(props)
+
+const mainItems = computed<NavigationMenuItem[]>(() => [
+  {
+    label: '控制台',
+    icon: 'i-heroicons-home-20-solid',
+    to: '/',
+    active: route.path === '/',
+  },
+  {
+    label: '角色',
+    icon: 'i-heroicons-user-group-20-solid',
+    to: '/roles',
+    active: route.path.startsWith('/roles'),
+  },
+  {
+    label: '机器人',
+    icon: 'i-heroicons-command-line-20-solid',
+    to: '/bots',
+    active: route.path.startsWith('/bots'),
+  },
+  {
+    label: '插件',
+    icon: 'i-heroicons-cube-20-solid',
+    to: '/plugins',
+    active: route.path.startsWith('/plugins'),
+  },
+])
+
+const footerItems = computed<NavigationMenuItem[]>(() => [
+  {
+    label: '设置',
+    icon: 'i-heroicons-cog-6-tooth-20-solid',
+    to: '/settings',
+    active: route.path.startsWith('/settings'),
+  },
+])
 </script>
-
-<style scoped>
-.sidebar {
-  width: 240px;
-  min-height: 100vh;
-  background: var(--sidebar-bg);
-  border-right: 1px solid var(--sidebar-border);
-  display: flex;
-  flex-direction: column;
-  transition: width 0.25s ease;
-  overflow: hidden;
-  position: sticky;
-  top: 0;
-  align-self: flex-start;
-  height: 100vh;
-}
-
-.sidebar.collapsed {
-  width: 64px;
-}
-
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1rem;
-  border-bottom: 1px solid var(--sidebar-border);
-  min-height: 60px;
-}
-
-.sidebar-logo {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: var(--accent);
-  color: #fff;
-  font-weight: 700;
-  font-size: 1rem;
-  flex-shrink: 0;
-}
-
-.sidebar-brand {
-  font-weight: 700;
-  font-size: 1.1rem;
-  color: var(--text-primary);
-  white-space: nowrap;
-}
-
-.sidebar-toggle {
-  margin-left: auto;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-secondary);
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.toggle-icon {
-  display: inline-block;
-  transition: transform 0.25s ease;
-  font-size: 0.75rem;
-}
-
-.toggle-icon.rotated {
-  transform: rotate(180deg);
-}
-
-.sidebar-nav {
-  flex: 1;
-  padding: 0.75rem 0.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.sidebar-link {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.6rem 0.75rem;
-  border-radius: 8px;
-  text-decoration: none;
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
-  white-space: nowrap;
-}
-
-.sidebar-link:hover {
-  background: var(--sidebar-hover);
-  color: var(--text-primary);
-}
-
-.sidebar-link--active {
-  background: var(--sidebar-active);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.sidebar-link-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  flex-shrink: 0;
-  font-size: 1rem;
-}
-
-.sidebar-link-label {
-  overflow: hidden;
-}
-
-.sidebar-footer {
-  padding: 0.5rem 0.5rem 0.75rem;
-  border-top: 1px solid var(--sidebar-border);
-}
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-</style>

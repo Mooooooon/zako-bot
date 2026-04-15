@@ -68,7 +68,7 @@ export function useModelPlatforms() {
 
   async function fetchModels(id: string): Promise<string[]> {
     const platform = platforms.value.find(p => p.id === id)
-    if (!platform) throw new Error('Platform not found')
+    if (!platform) throw new Error('未找到对应平台')
 
     const res = await $fetch<{ models: string[] }>('/api/models/fetch', {
       method: 'POST',

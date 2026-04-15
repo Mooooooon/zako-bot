@@ -1,3 +1,3 @@
 <template>
-  <PlaceholderPage title="Plugins" />
+  <PlaceholderPage title="插件" />
 </template>
