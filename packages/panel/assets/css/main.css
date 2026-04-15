@@ -1,3 +1,6 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
 :root {
   --sidebar-bg: #f8f9fb;
   --sidebar-border: #e5e7eb;
@@ -11,25 +14,21 @@
   --card-border: #e5e7eb;
   --color-red: #ef4444;
   --body-bg: #f3f4f6;
-
-  color-scheme: light dark;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --sidebar-bg: #1e1e2e;
-    --sidebar-border: #2d2d3f;
-    --sidebar-hover: #262637;
-    --sidebar-active: #2a2a4a;
-    --accent: #818cf8;
-    --accent-light: #a5b4fc;
-    --text-primary: #e4e4ef;
-    --text-secondary: #9ca3af;
-    --card-bg: #232336;
-    --card-border: #2d2d3f;
-    --color-red: #f87171;
-    --body-bg: #181825;
-  }
+.dark {
+  --sidebar-bg: #1e1e2e;
+  --sidebar-border: #2d2d3f;
+  --sidebar-hover: #262637;
+  --sidebar-active: #2a2a4a;
+  --accent: #818cf8;
+  --accent-light: #a5b4fc;
+  --text-primary: #e4e4ef;
+  --text-secondary: #9ca3af;
+  --card-bg: #232336;
+  --card-border: #2d2d3f;
+  --color-red: #f87171;
+  --body-bg: #181825;
 }
 
 *,

@@ -23,6 +23,14 @@
         </transition>
       </NuxtLink>
     </nav>
+    <div class="sidebar-footer">
+      <NuxtLink to="/settings" class="sidebar-link" active-class="sidebar-link--active">
+        <span class="sidebar-link-icon">&#9881;</span>
+        <transition name="fade">
+          <span v-if="!collapsed" class="sidebar-link-label">设置</span>
+        </transition>
+      </NuxtLink>
+    </div>
   </aside>
 </template>
 
@@ -155,6 +163,11 @@ const navItems = [
 
 .sidebar-link-label {
   overflow: hidden;
+}
+
+.sidebar-footer {
+  padding: 0.5rem 0.5rem 0.75rem;
+  border-top: 1px solid var(--sidebar-border);
 }
 
 .fade-enter-active,
