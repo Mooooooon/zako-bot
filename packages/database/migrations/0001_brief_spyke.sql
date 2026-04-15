@@ -1,0 +1,1 @@
+ALTER TABLE `bot_instances` ADD `require_mention` integer DEFAULT true NOT NULL;

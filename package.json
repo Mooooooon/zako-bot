@@ -1,0 +1,20 @@
+{
+  "name": "zakobot",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev:deps": "concurrently \"pnpm --filter @zakobot/shared dev\" \"pnpm --filter @zakobot/database dev\"",
+    "dev:core": "pnpm --filter @zakobot/core dev",
+    "dev:panel": "pnpm --filter @zakobot/panel dev",
+    "dev": "concurrently \"pnpm dev:deps\" \"pnpm dev:core\" \"pnpm dev:panel\"",
+    "build": "pnpm --filter @zakobot/shared build && pnpm --filter @zakobot/database build && pnpm -r --filter '!@zakobot/shared' --filter '!@zakobot/database' build",
+    "lint": "pnpm -r lint"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "better-sqlite3"]
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  }
+}

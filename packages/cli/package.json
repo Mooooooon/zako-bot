@@ -1,0 +1,31 @@
+{
+  "name": "zakobot",
+  "version": "0.1.0",
+  "description": "Modular LLM bot framework with Discord support and a web management panel",
+  "keywords": ["bot", "discord", "llm", "ai", "chatbot"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mooooooon/zako-bot.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/Mooooooon/zako-bot#readme",
+  "type": "module",
+  "bin": {
+    "zakobot": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@zakobot/core": "workspace:*",
+    "@zakobot/panel": "workspace:*",
+    "commander": "^13.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.3"
+  }
+}
