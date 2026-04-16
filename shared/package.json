@@ -1,6 +1,6 @@
 {
   "name": "@zakobot/shared",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "ZakoBot shared TypeScript types",
   "license": "MIT",
   "repository": {
