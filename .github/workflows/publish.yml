@@ -39,7 +39,17 @@ jobs:
         run: pnpm -r --fail-if-no-match --filter @zakobot/shared --filter @zakobot/database --filter @zakobot/core --filter @zakobot/panel --filter ./packages/cli pack --dry-run
 
       - name: Publish packages
-        run: pnpm -r --fail-if-no-match --filter @zakobot/shared --filter @zakobot/database --filter @zakobot/core --filter @zakobot/panel --filter ./packages/cli publish --access public --no-git-checks --report-summary
+        shell: bash
+        run: |
+          set +e
+          output="$(pnpm -r --fail-if-no-match --filter @zakobot/shared --filter @zakobot/database --filter @zakobot/core --filter @zakobot/panel --filter ./packages/cli publish --access public --no-git-checks --report-summary 2>&1)"
+          status=$?
+          printf '%s\n' "$output"
+          if [ "$status" -ne 0 ]; then
+            message="$(printf '%s\n' "$output" | tail -n 80 | sed -E 's/[A-Za-z0-9_=-]{24,}/[redacted]/g' | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')"
+            echo "::error title=Publish packages failed::$message"
+            exit "$status"
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: 'true'
