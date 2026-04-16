@@ -1,6 +1,6 @@
 {
   "name": "@zakobot/core",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "ZakoBot core — bot engine, LLM agent, plugin loader",
   "license": "MIT",
   "repository": {

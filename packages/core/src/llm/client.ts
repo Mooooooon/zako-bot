@@ -1,6 +1,8 @@
 import OpenAI from 'openai'
 import type { LLMConfig, ChatMessage, LLMTool } from '@zakobot/shared'
 
+const MAX_TOOL_CALL_ROUNDS = 8
+
 export class LLMClient {
   private openai: OpenAI
 
@@ -15,7 +17,7 @@ export class LLMClient {
     const requestMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [...messages]
     const toolDefinitions = this.buildToolDefinitions(tools)
 
-    for (let i = 0; i < 4; i += 1) {
+    for (let i = 0; i < MAX_TOOL_CALL_ROUNDS; i += 1) {
       const response = await this.openai.chat.completions.create({
         model: this.config.model,
         messages: requestMessages,
@@ -35,11 +37,30 @@ export class LLMClient {
         return message.content ?? ''
       }
 
-      requestMessages.push(message)
+      requestMessages.push(this.toAssistantToolCallMessage(message))
       requestMessages.push(...await this.executeToolCalls(message, tools))
     }
 
-    throw new Error('LLM exceeded maximum tool call rounds')
+    console.warn(`[LLM] Reached tool-call limit (${MAX_TOOL_CALL_ROUNDS}); requesting final answer without tools.`)
+
+    const finalResponse = await this.openai.chat.completions.create({
+      model: this.config.model,
+      messages: [
+        ...requestMessages,
+        {
+          role: 'system',
+          content: '你已经完成了足够的工具调用。不要再调用任何工具，直接基于现有上下文和工具结果给出最终回答；若信息仍不足，请明确说明不确定之处。',
+        },
+      ],
+    })
+
+    const finalMessage = finalResponse.choices[0]?.message
+
+    if (!finalMessage) {
+      throw new Error('LLM returned empty response after tool-call limit')
+    }
+
+    return finalMessage.content ?? ''
   }
 
   private buildToolDefinitions(tools: LLMTool[]): OpenAI.Chat.ChatCompletionTool[] {
@@ -86,6 +107,32 @@ export class LLMClient {
     }
 
     return toolCallMessages
+  }
+
+  private toAssistantToolCallMessage(
+    message: OpenAI.Chat.ChatCompletionMessage,
+  ): OpenAI.Chat.ChatCompletionAssistantMessageParam {
+    const functionToolCalls = (message.tool_calls ?? [])
+      .filter((toolCall): toolCall is OpenAI.Chat.ChatCompletionMessageFunctionToolCall =>
+        toolCall.type === 'function',
+      )
+
+    return {
+      role: 'assistant',
+      content: message.content ?? '',
+      ...(functionToolCalls.length
+        ? {
+            tool_calls: functionToolCalls.map((toolCall) => ({
+              id: toolCall.id,
+              type: 'function',
+              function: {
+                name: toolCall.function.name,
+                arguments: toolCall.function.arguments,
+              },
+            })),
+          }
+        : {}),
+    }
   }
 
   private formatLogValue(value: unknown) {
