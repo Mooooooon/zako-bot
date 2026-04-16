@@ -11,3 +11,5 @@ dist/
 *.db-shm
 *.db-wal
 packages/panel/.data/
+packages/panel/--host/
+packages/panel/--port/

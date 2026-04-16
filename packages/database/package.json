@@ -17,6 +17,9 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": ["dist", "migrations"],
   "scripts": {
     "build": "tsc",

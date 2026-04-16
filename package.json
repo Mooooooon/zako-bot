@@ -1,5 +1,5 @@
 {
-  "name": "zakobot",
+  "name": "@zakobot/workspace",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -7,7 +7,7 @@
     "dev:core": "pnpm --filter @zakobot/core dev",
     "dev:panel": "pnpm --filter @zakobot/panel dev",
     "dev": "concurrently \"pnpm dev:deps\" \"pnpm dev:core\" \"pnpm dev:panel\"",
-    "build": "pnpm --filter @zakobot/shared build && pnpm --filter @zakobot/database build && pnpm -r --filter '!@zakobot/shared' --filter '!@zakobot/database' build",
+    "build": "pnpm --filter @zakobot/shared --fail-if-no-match build && pnpm --filter @zakobot/database --fail-if-no-match build && pnpm --filter @zakobot/core --fail-if-no-match build && pnpm --filter @zakobot/panel --fail-if-no-match build && pnpm --filter ./packages/cli --fail-if-no-match build",
     "lint": "pnpm -r lint"
   },
   "pnpm": {

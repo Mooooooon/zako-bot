@@ -89,11 +89,21 @@ function runPackage(pkgName: 'core' | 'panel') {
   const entry = resolveEntry(pkgName)
   const home = zakobotHome()
   mkdirSync(home, { recursive: true })
+  const coreApiPort = process.env.CORE_API_PORT ?? '6325'
+  const panelPort = process.env.PANEL_PORT ?? process.env.NITRO_PORT ?? process.env.PORT ?? '6324'
+  const packageEnv = pkgName === 'panel'
+    ? {
+        CORE_API_URL: process.env.CORE_API_URL ?? `http://127.0.0.1:${coreApiPort}`,
+        NITRO_PORT: panelPort,
+        PORT: panelPort,
+      }
+    : {}
 
   const child = spawn(process.execPath, [entry], {
     stdio: 'inherit',
     env: {
       ...process.env,
+      ...packageEnv,
       ZAKOBOT_HOME: home,
     },
   })

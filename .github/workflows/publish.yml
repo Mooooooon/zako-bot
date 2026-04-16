@@ -1,6 +1,7 @@
 name: Publish to npm
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*'
@@ -32,14 +33,12 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build all packages
-        run: |
-          pnpm --filter @zakobot/shared build
-          pnpm --filter @zakobot/database build
-          pnpm --filter @zakobot/core build
-          pnpm --filter @zakobot/panel build
-          pnpm --filter zakobot build
+        run: pnpm build
+
+      - name: Verify package contents
+        run: pnpm -r --fail-if-no-match --filter @zakobot/shared --filter @zakobot/database --filter @zakobot/core --filter @zakobot/panel --filter ./packages/cli pack --dry-run
 
       - name: Publish packages
-        run: pnpm publish -r --access public --no-git-checks
+        run: pnpm -r --fail-if-no-match --filter @zakobot/shared --filter @zakobot/database --filter @zakobot/core --filter @zakobot/panel --filter ./packages/cli publish --access public --no-git-checks --provenance --report-summary
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
