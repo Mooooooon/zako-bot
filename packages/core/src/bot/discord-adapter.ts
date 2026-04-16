@@ -1,7 +1,12 @@
 import { Client, GatewayIntentBits } from 'discord.js'
 import type { BotInstanceRow, RoleRow } from '@zakobot/database'
 import type { Agent } from '../llm/agent.js'
-import type { ConversationService } from '../llm/conversation-service.js'
+import type { ConversationScope, ConversationService } from '../llm/conversation-service.js'
+
+const NEW_TOPIC_COMMAND = {
+  name: 'new',
+  description: '开启新话题',
+}
 
 export class DiscordAdapter {
   readonly client: Client
@@ -22,9 +27,13 @@ export class DiscordAdapter {
 
     this.client.once('clientReady', (c) => {
       console.log(`[Discord] "${instance.name}" logged in as ${c.user.tag}`)
+      void this.registerCommands().catch((err) => {
+        console.error(`[Discord] Failed to register commands for "${instance.name}":`, err)
+      })
     })
 
     this.client.on('messageCreate', (msg) => this.handleMessage(msg))
+    this.client.on('interactionCreate', (interaction) => this.handleInteraction(interaction))
   }
 
   private async handleMessage(msg: import('discord.js').Message) {
@@ -44,23 +53,14 @@ export class DiscordAdapter {
 
     if (!userText) return
 
-    const scope = {
-      platform: this.instance.platform,
-      scopeKey: `discord:${msg.channelId}`,
-      sourceType: 'discord_channel',
-      sourceId: msg.channelId,
-      metadata: {
-        channelId: msg.channelId,
-        guildId: msg.guildId ?? '',
-      },
-    }
+    const scope = this.buildChannelScope(msg.channelId, msg.guildId)
 
     // PartialGroupDMChannel doesn't support sending — guard against it
     if (!('send' in msg.channel)) return
 
     try {
       if (userText === '/new') {
-        const topic = this.conversations.startNewTopic(this.instance, scope)
+        const topic = this.startNewTopic(scope)
         await msg.reply(`已开启新话题：${topic.name}`)
         return
       }
@@ -97,6 +97,100 @@ export class DiscordAdapter {
     } catch (err) {
       console.error(`[Discord] Agent error in "${this.instance.name}":`, err)
       await msg.reply('Something went wrong, please try again.').catch(() => {})
+    }
+  }
+
+  private async handleInteraction(interaction: import('discord.js').Interaction) {
+    if (!interaction.isChatInputCommand()) return
+    if (interaction.commandName !== NEW_TOPIC_COMMAND.name) return
+
+    try {
+      if (this.instance.discordUserId && interaction.user.id !== this.instance.discordUserId) {
+        await interaction.reply({
+          content: '只有已配置的 Discord 用户可以使用此命令。',
+          ephemeral: true,
+        })
+        return
+      }
+
+      if (this.instance.discordGuildId && interaction.guildId !== this.instance.discordGuildId) {
+        await interaction.reply({
+          content: '此命令只能在已配置的 Discord 服务器中使用。',
+          ephemeral: true,
+        })
+        return
+      }
+
+      const topic = this.startNewTopic(
+        this.buildChannelScope(interaction.channelId, interaction.guildId),
+      )
+
+      await interaction.reply(`已开启新话题：${topic.name}`)
+    } catch (err) {
+      console.error(`[Discord] Command error in "${this.instance.name}":`, err)
+
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp({
+          content: '开启新话题失败，请稍后重试。',
+          ephemeral: true,
+        }).catch(() => {})
+        return
+      }
+
+      await interaction.reply({
+        content: '开启新话题失败，请稍后重试。',
+        ephemeral: true,
+      }).catch(() => {})
+    }
+  }
+
+  private async registerCommands() {
+    const application = this.client.application
+    if (!application) throw new Error('Discord application is not ready')
+
+    if (this.instance.discordGuildId) {
+      const guild = await this.client.guilds.fetch(this.instance.discordGuildId)
+      const existing = (await guild.commands.fetch()).find(command =>
+        command.name === NEW_TOPIC_COMMAND.name,
+      )
+
+      if (existing) {
+        await existing.edit(NEW_TOPIC_COMMAND)
+      } else {
+        await guild.commands.create(NEW_TOPIC_COMMAND)
+      }
+
+      console.log(`[Discord] Registered /${NEW_TOPIC_COMMAND.name} for guild ${guild.id}`)
+      return
+    }
+
+    const existing = (await application.commands.fetch()).find(command =>
+      command.name === NEW_TOPIC_COMMAND.name,
+    )
+
+    if (existing) {
+      await existing.edit(NEW_TOPIC_COMMAND)
+    } else {
+      await application.commands.create(NEW_TOPIC_COMMAND)
+    }
+
+    console.log(`[Discord] Registered global /${NEW_TOPIC_COMMAND.name}`)
+  }
+
+  private startNewTopic(scope: ConversationScope) {
+    return this.conversations.startNewTopic(this.instance, scope)
+  }
+
+  private buildChannelScope(channelId: string, guildId: string | null): ConversationScope {
+    return {
+      platform: this.instance.platform,
+      scopeKey: `discord:${channelId}`,
+      sourceType: 'discord_channel',
+      sourceId: channelId,
+      metadata: {
+        channelId,
+        guildId: guildId ?? '',
+      },
     }
   }
 
