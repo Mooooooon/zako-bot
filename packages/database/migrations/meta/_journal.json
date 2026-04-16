@@ -15,6 +15,13 @@
       "when": 1776239540958,
       "tag": "0001_brief_spyke",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1776321183445,
+      "tag": "0002_strong_stone_men",
+      "breakpoints": true
     }
   ]
 }

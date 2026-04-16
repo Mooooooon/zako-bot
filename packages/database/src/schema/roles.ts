@@ -2,6 +2,7 @@ import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
 
 export const roles = sqliteTable('roles', {
   id: text('id').primaryKey(),
+  avatar: text('avatar').notNull().default(''),
   name: text('name').notNull(),
   systemPrompt: text('system_prompt').notNull().default(''),
   // LLM config — stored flat for simplicity

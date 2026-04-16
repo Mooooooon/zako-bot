@@ -1,0 +1,1 @@
+ALTER TABLE `roles` ADD `avatar` text DEFAULT '' NOT NULL;
