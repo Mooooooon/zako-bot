@@ -1,5 +1,5 @@
 <template>
-  <div class="flex min-h-[calc(100vh-4rem)] flex-col gap-6">
+  <div class="flex h-[calc(100vh-4rem)] min-h-0 flex-col gap-6 overflow-hidden">
     <header class="flex flex-col gap-1">
       <h1 class="m-0 text-2xl font-bold text-[var(--text-primary)]">
         聊天
@@ -78,7 +78,7 @@
           />
         </div>
 
-        <div class="min-h-0 flex-1">
+        <div class="min-h-0 flex-1 overflow-y-auto">
           <div v-if="topicsPending || messagesPending" class="space-y-3 px-4 py-4">
             <USkeleton class="h-16 w-3/4" />
             <USkeleton class="ml-auto h-14 w-2/3" />
