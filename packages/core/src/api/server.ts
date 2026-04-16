@@ -50,7 +50,7 @@ export class ApiServer {
 
   async start() {
     const port = Number(process.env.CORE_API_PORT ?? 6325)
-    await new Promise<void>((resolve) => this.server.listen(port, '127.0.0.1', resolve))
+    await this.listenWithRetry(port, '127.0.0.1')
     this.started = true
     console.log(`[ApiServer] Listening on 127.0.0.1:${port}`)
   }
@@ -73,6 +73,63 @@ export class ApiServer {
 
     this.started = false
     console.log('[ApiServer] Stopped.')
+  }
+
+  private async listenWithRetry(port: number, host: string) {
+    const attempts = 20
+    const retryDelayMs = 250
+
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        await this.listen(port, host)
+        return
+      } catch (error) {
+        const code = this.getErrorCode(error)
+        const shouldRetry = code === 'EADDRINUSE' && attempt < attempts
+
+        if (!shouldRetry && code === 'EADDRINUSE') {
+          throw new Error(
+            `Core API port ${host}:${port} is already in use. Stop the existing core process or set CORE_API_PORT to another port.`,
+            { cause: error },
+          )
+        }
+
+        if (!shouldRetry) {
+          throw error
+        }
+
+        await new Promise(resolve => setTimeout(resolve, retryDelayMs))
+      }
+    }
+  }
+
+  private listen(port: number, host: string) {
+    return new Promise<void>((resolve, reject) => {
+      const cleanup = () => {
+        this.server.off('error', onError)
+        this.server.off('listening', onListening)
+      }
+
+      const onError = (error: Error) => {
+        cleanup()
+        reject(error)
+      }
+
+      const onListening = () => {
+        cleanup()
+        resolve()
+      }
+
+      this.server.once('error', onError)
+      this.server.once('listening', onListening)
+      this.server.listen(port, host)
+    })
+  }
+
+  private getErrorCode(error: unknown) {
+    return typeof error === 'object' && error !== null && 'code' in error
+      ? String(error.code)
+      : undefined
   }
 
   private json<T>(res: http.ServerResponse, data: ApiResponse<T>, status = 200) {

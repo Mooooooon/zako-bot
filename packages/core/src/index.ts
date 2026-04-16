@@ -30,14 +30,7 @@ async function main() {
   const pluginLoader = new PluginLoader(botManager, toolRegistry)
   const apiServer = new ApiServer(db, botManager, pluginLoader)
 
-  const shutdown = async (signal: string) => {
-    if (shuttingDown) {
-      return
-    }
-
-    shuttingDown = true
-    console.log(`[Core] Received ${signal}, shutting down...`)
-
+  const stopServices = async () => {
     const tasks = [
       apiServer.stop(),
       pluginLoader.unloadAll(),
@@ -50,7 +43,17 @@ async function main() {
         console.error('[Core] Shutdown step failed:', result.reason)
       }
     }
+  }
 
+  const shutdown = async (signal: string) => {
+    if (shuttingDown) {
+      return
+    }
+
+    shuttingDown = true
+    console.log(`[Core] Received ${signal}, shutting down...`)
+
+    await stopServices()
     process.exit(0)
   }
 
@@ -62,9 +65,17 @@ async function main() {
     void shutdown('SIGTERM')
   })
 
-  await pluginLoader.loadAll()
-  await botManager.startAll()
-  await apiServer.start()
+  try {
+    await apiServer.start()
+    await pluginLoader.loadAll()
+    await botManager.startAll()
+  } catch (error) {
+    await stopServices()
+    throw error
+  }
 }
 
-main().catch(console.error)
+main().catch((error) => {
+  console.error('[Core] Fatal error:', error)
+  process.exit(1)
+})
