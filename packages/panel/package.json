@@ -18,10 +18,12 @@
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {
+    "@comark/nuxt": "^0.2.1",
     "@iconify-json/heroicons": "^1.2.3",
     "@nuxt/ui": "^4.6.1",
     "@zakobot/shared": "workspace:*",
     "nuxt": "^4.4.2",
+    "shiki": "^4.0.2",
     "tailwindcss": "^4.2.2"
   },
   "devDependencies": {

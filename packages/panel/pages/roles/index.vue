@@ -27,6 +27,17 @@
       :description="error.message"
     />
 
+    <UAlert
+      v-if="deleteTarget"
+      color="error"
+      variant="subtle"
+      icon="i-heroicons-exclamation-triangle-20-solid"
+      title="确认删除角色"
+      :description="`角色「${deleteTarget.name}」删除后不可恢复。`"
+      :actions="deleteConfirmActions"
+      orientation="horizontal"
+    />
+
     <UCard variant="subtle">
       <div v-if="pending" class="space-y-3">
         <USkeleton class="h-12 w-full" />
@@ -75,6 +86,7 @@ const { data, pending, error, refresh } = await useFetch<{ ok: true, data: RoleP
 const UAvatar = resolveComponent('UAvatar')
 const UButton = resolveComponent('UButton')
 const deletingId = ref('')
+const deleteTarget = ref<RoleRow | null>(null)
 
 const roleRows = computed<RoleRow[]>(() => (data.value?.data ?? []).map(role => ({
   id: role.id,
@@ -130,21 +142,49 @@ const columns: TableColumn<RoleRow>[] = [
           variant: 'outline',
           loading: deletingId.value === row.original.id,
           disabled: deletingId.value.length > 0,
-          onClick: () => handleDelete(row.original),
+          onClick: () => openDeleteConfirm(row.original),
         }),
       ]),
   },
 ]
 
+const deleteConfirmActions = computed(() => [
+  {
+    label: '取消',
+    color: 'neutral' as const,
+    variant: 'outline' as const,
+    disabled: deletingId.value.length > 0,
+    onClick: closeDeleteConfirm,
+  },
+  {
+    label: deleteTarget.value && deletingId.value === deleteTarget.value.id ? '删除中' : '确认删除',
+    color: 'error' as const,
+    loading: deleteTarget.value ? deletingId.value === deleteTarget.value.id : false,
+    disabled: deletingId.value.length > 0,
+    onClick: handleDelete,
+  },
+])
+
 function openNewRole() {
   return navigateTo('/roles/new')
 }
 
-async function handleDelete(role: RoleRow) {
-  if (import.meta.client && !window.confirm(`确认删除角色「${role.name}」？此操作不可恢复。`)) {
+function openDeleteConfirm(role: RoleRow) {
+  deleteTarget.value = role
+}
+
+function closeDeleteConfirm() {
+  if (!deletingId.value) {
+    deleteTarget.value = null
+  }
+}
+
+async function handleDelete() {
+  if (!deleteTarget.value) {
     return
   }
 
+  const role = deleteTarget.value
   deletingId.value = role.id
 
   try {
@@ -153,6 +193,7 @@ async function handleDelete(role: RoleRow) {
     })
 
     toast.add({ title: `已删除角色「${deleted.data.name}」`, color: 'success' })
+    deleteTarget.value = null
     await refresh()
   }
   catch (error: any) {

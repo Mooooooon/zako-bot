@@ -57,7 +57,7 @@ export default defineNuxtConfig({
     port: Number(process.env.PANEL_PORT ?? process.env.NUXT_PORT ?? 6324),
   },
 
-  modules: ['@nuxt/ui'],
+  modules: ['@nuxt/ui', '@comark/nuxt'],
 
   nitro: {
     compressPublicAssets: true,

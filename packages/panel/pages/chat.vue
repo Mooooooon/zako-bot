@@ -112,13 +112,25 @@
           >
             <template #content="{ message }">
               <div class="space-y-2">
-                <p
+                <template
                   v-for="(part, index) in message.parts"
                   :key="`${message.id}-${index}`"
-                  class="whitespace-pre-wrap break-words text-sm leading-6 text-[var(--text-primary)]"
                 >
-                  {{ part.text }}
-                </p>
+                  <p
+                    v-if="message.role === 'user'"
+                    class="whitespace-pre-wrap break-words text-sm leading-6 text-[var(--text-primary)]"
+                  >
+                    {{ part.text }}
+                  </p>
+                  <Comark
+                    v-else
+                    class="chat-markdown text-sm leading-6 text-[var(--text-primary)]"
+                    :markdown="part.text"
+                    :options="comarkOptions"
+                    :plugins="comarkPlugins"
+                    :streaming="isPartStreaming(message)"
+                  />
+                </template>
                 <p
                   v-if="message.createdAt"
                   class="text-[11px] text-[var(--text-secondary)]"
@@ -162,6 +174,8 @@
 </template>
 
 <script setup lang="ts">
+import highlight from '@comark/nuxt/plugins/highlight'
+import security from '@comark/nuxt/plugins/security'
 import type {
   BotListItem,
   ConversationMessage,
@@ -256,13 +270,25 @@ const assistantMessageProps = computed(() => ({
     : undefined,
   icon: selectedBot.value?.roleAvatar ? undefined : 'i-heroicons-cpu-chip-20-solid',
   side: 'left' as const,
-  variant: 'naked' as const,
+  variant: 'soft' as const,
 }))
 
 const promptUi = {
   base: 'min-h-[88px] pe-16 py-3',
   trailing: 'pe-3 inset-y-3 items-end',
 }
+
+const comarkOptions = {
+  html: false,
+}
+
+const comarkPlugins = [
+  security({
+    allowDataImages: false,
+    blockedTags: ['iframe', 'object', 'script', 'style'],
+  }),
+  highlight(),
+]
 
 const uiMessages = computed<UiMessage[]>(() =>
   messages.value.map(message => ({
@@ -272,6 +298,12 @@ const uiMessages = computed<UiMessage[]>(() =>
     createdAt: new Date(message.createdAt),
   })),
 )
+
+function isPartStreaming(message: UiMessage) {
+  const lastMessage = uiMessages.value.at(-1)
+
+  return chatStatus.value === 'submitted' && message.role === 'assistant' && message.id === lastMessage?.id
+}
 
 watch(botOptions, (options) => {
   if (!selectedBotId.value && options.length > 0) {

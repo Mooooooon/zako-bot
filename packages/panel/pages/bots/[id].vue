@@ -11,28 +11,40 @@
 
     <USkeleton v-else-if="pending" class="h-[36rem] w-full" />
 
-    <BotEditorForm
-      v-else-if="bot"
-      title="编辑机器人"
-      description="修改连接信息、角色绑定和启用状态。"
-      submit-label="保存修改"
-      :initial-value="form"
-      :role-options="roleOptions"
-      :pending="saving || deleting"
-      @submit="handleSubmit"
-    >
-      <template #actions-left>
-        <UButton
-          label="删除机器人"
-          color="error"
-          variant="outline"
-          type="button"
-          :loading="deleting"
-          :disabled="saving || deleting"
-          @click="handleDelete"
-        />
-      </template>
-    </BotEditorForm>
+    <template v-else-if="bot">
+      <UAlert
+        v-if="showDeleteConfirm"
+        color="error"
+        variant="subtle"
+        icon="i-heroicons-exclamation-triangle-20-solid"
+        title="确认删除机器人"
+        :description="`机器人「${bot.name}」删除后不可恢复。`"
+        :actions="deleteConfirmActions"
+        orientation="horizontal"
+      />
+
+      <BotEditorForm
+        title="编辑机器人"
+        description="修改连接信息、角色绑定和启用状态。"
+        submit-label="保存修改"
+        :initial-value="form"
+        :role-options="roleOptions"
+        :pending="saving || deleting"
+        @submit="handleSubmit"
+      >
+        <template #actions-left>
+          <UButton
+            label="删除机器人"
+            color="error"
+            variant="outline"
+            type="button"
+            :loading="deleting"
+            :disabled="saving || deleting"
+            @click="openDeleteConfirm"
+          />
+        </template>
+      </BotEditorForm>
+    </template>
   </div>
 </template>
 
@@ -56,6 +68,7 @@ const { data: rolesData, error: rolesError } = rolesState
 
 const saving = ref(false)
 const deleting = ref(false)
+const showDeleteConfirm = ref(false)
 
 const bot = computed(() => data.value?.data ?? null)
 const roleOptions = computed(() =>
@@ -81,6 +94,23 @@ const form = computed<BotEditorInput>(() => ({
   enabled: bot.value?.enabled ?? true,
 }))
 
+const deleteConfirmActions = computed(() => [
+  {
+    label: '取消',
+    color: 'neutral' as const,
+    variant: 'outline' as const,
+    disabled: deleting.value,
+    onClick: closeDeleteConfirm,
+  },
+  {
+    label: deleting.value ? '删除中' : '确认删除',
+    color: 'error' as const,
+    loading: deleting.value,
+    disabled: deleting.value,
+    onClick: handleDelete,
+  },
+])
+
 async function handleSubmit(payload: BotEditorInput) {
   saving.value = true
 
@@ -105,8 +135,18 @@ async function handleSubmit(payload: BotEditorInput) {
   }
 }
 
+function openDeleteConfirm() {
+  showDeleteConfirm.value = true
+}
+
+function closeDeleteConfirm() {
+  if (!deleting.value) {
+    showDeleteConfirm.value = false
+  }
+}
+
 async function handleDelete() {
-  if (!bot.value || (import.meta.client && !window.confirm(`确认删除机器人「${bot.value.name}」？此操作不可恢复。`))) {
+  if (!bot.value) {
     return
   }
 
@@ -118,6 +158,7 @@ async function handleDelete() {
     })
 
     toast.add({ title: `已删除机器人「${deleted.data.name}」`, color: 'success' })
+    showDeleteConfirm.value = false
     await navigateTo('/bots')
   }
   catch (error: any) {
