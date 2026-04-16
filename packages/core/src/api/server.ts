@@ -16,6 +16,7 @@ import type { DB, RoleRow } from '@zakobot/database'
 import type { BotManager } from '../bot/bot-manager.js'
 import type { PluginLoader } from '../plugins/loader.js'
 import { getSearchSettings, saveSearchSettings } from '../settings/search-settings.js'
+import { getBrowseSettings, saveBrowseSettings } from '../settings/browse-settings.js'
 import type {
   ApiResponse,
   BotEditorInput,
@@ -27,6 +28,7 @@ import type {
   RoleEditorInput,
   RoleProfile,
   BuiltinTool,
+  BrowseSettings,
   SearchSettings,
   SendConversationMessageInput,
   SendConversationMessageResult,
@@ -276,6 +278,19 @@ export class ApiServer {
     }
   }
 
+  private parseBrowseSettingsInput(body: Partial<BrowseSettings>): BrowseSettings {
+    return {
+      provider: body.provider === 'jina' ? 'jina' : 'fetch',
+      jinaApiKey: body.jinaApiKey?.trim() ?? '',
+      jinaEngine: body.jinaEngine === 'direct' || body.jinaEngine === 'cf-browser-rendering'
+        ? body.jinaEngine
+        : 'browser',
+      jinaRetainImages: this.normalizeJinaRetainImages(body.jinaRetainImages),
+      jinaTokenBudgetEnabled: Boolean(body.jinaTokenBudgetEnabled),
+      jinaTokenBudget: this.normalizeJinaTokenBudget(body.jinaTokenBudget),
+    }
+  }
+
   private parseJsonRecord(value: string): Record<string, unknown> {
     try {
       const parsed = JSON.parse(value) as Record<string, unknown>
@@ -304,6 +319,28 @@ export class ApiServer {
     return [...new Set(value)].filter((tool): tool is BuiltinTool =>
       typeof tool === 'string' && allowed.has(tool as BuiltinTool),
     )
+  }
+
+  private normalizeJinaRetainImages(value: unknown): BrowseSettings['jinaRetainImages'] {
+    return (
+      value === 'all'
+      || value === 'alt'
+      || value === 'all_p'
+      || value === 'alt_p'
+      || value === 'none'
+    )
+      ? value
+      : 'none'
+  }
+
+  private normalizeJinaTokenBudget(value: unknown) {
+    const number = typeof value === 'number' ? value : Number(value)
+
+    if (!Number.isFinite(number)) {
+      return 200_000
+    }
+
+    return Math.min(Math.max(Math.trunc(number), 1_000), 1_000_000)
   }
 
   private async handle(req: http.IncomingMessage, res: http.ServerResponse) {
@@ -335,6 +372,21 @@ export class ApiServer {
       try {
         const payload = this.parseSearchSettingsInput(await this.readJson<SearchSettings>(req))
         return this.json(res, { ok: true, data: saveSearchSettings(this.db, payload) })
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid request body'
+        return this.json(res, { ok: false, error: message }, 400)
+      }
+    }
+
+    if (pathname === '/settings/browse' && req.method === 'GET') {
+      return this.json(res, { ok: true, data: getBrowseSettings(this.db) })
+    }
+
+    if (pathname === '/settings/browse' && req.method === 'PUT') {
+      try {
+        const payload = this.parseBrowseSettingsInput(await this.readJson<BrowseSettings>(req))
+        return this.json(res, { ok: true, data: saveBrowseSettings(this.db, payload) })
       }
       catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid request body'

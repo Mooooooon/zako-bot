@@ -6,6 +6,7 @@ const MAX_REDIRECTS = 5
 export interface SafeFetchOptions {
   timeoutMs?: number
   maxBytes?: number
+  headers?: HeadersInit
 }
 
 export interface SafeFetchResult {
@@ -23,10 +24,7 @@ export async function safeFetchText(inputUrl: string, options: SafeFetchOptions 
     const response = await fetch(url, {
       redirect: 'manual',
       signal: AbortSignal.timeout(timeoutMs),
-      headers: {
-        accept: 'text/html,text/plain,application/xhtml+xml;q=0.9,*/*;q=0.5',
-        'user-agent': 'ZakoBot/0.1 (+https://github.com/Mooooooon/zako-bot)',
-      },
+      headers: buildHeaders(options.headers),
     })
 
     if (isRedirect(response.status)) {
@@ -53,7 +51,7 @@ export async function safeFetchText(inputUrl: string, options: SafeFetchOptions 
   throw new Error('Too many redirects')
 }
 
-async function assertSafeHttpUrl(inputUrl: string) {
+export async function assertSafeHttpUrl(inputUrl: string) {
   let url: URL
 
   try {
@@ -73,6 +71,23 @@ async function assertSafeHttpUrl(inputUrl: string) {
 
   await assertPublicHostname(url.hostname)
   return url.toString()
+}
+
+function buildHeaders(extraHeaders?: HeadersInit) {
+  const headers = new Headers({
+    accept: 'text/html,text/plain,application/xhtml+xml;q=0.9,*/*;q=0.5',
+    'user-agent': 'ZakoBot/0.1 (+https://github.com/Mooooooon/zako-bot)',
+  })
+
+  if (!extraHeaders) {
+    return headers
+  }
+
+  new Headers(extraHeaders).forEach((value, key) => {
+    headers.set(key, value)
+  })
+
+  return headers
 }
 
 async function assertPublicHostname(hostname: string) {

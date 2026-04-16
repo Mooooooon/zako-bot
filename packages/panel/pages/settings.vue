@@ -48,6 +48,13 @@ const settingItems = [
     to: '/settings/search',
     match: '/settings/search',
   },
+  {
+    label: '浏览设置',
+    icon: 'i-heroicons-globe-alt-20-solid',
+    value: 'browse',
+    to: '/settings/browse',
+    match: '/settings/browse',
+  },
 ] as const
 
 const activeTab = computed(() =>
