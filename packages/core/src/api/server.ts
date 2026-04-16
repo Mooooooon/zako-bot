@@ -1,13 +1,30 @@
 import http from 'http'
 import { randomUUID } from 'crypto'
-import { createRole, getRole, listRoles, updateRole } from '@zakobot/database'
+import {
+  createBot,
+  createRole,
+  getBotWithRole,
+  getRole,
+  listBotsWithRoles,
+  listRoles,
+  updateBot,
+  updateRole,
+} from '@zakobot/database'
 import type { DB, RoleRow } from '@zakobot/database'
 import type { BotManager } from '../bot/bot-manager.js'
 import type { PluginLoader } from '../plugins/loader.js'
-import type { ApiResponse, RoleEditorInput, RoleProfile } from '@zakobot/shared'
+import type {
+  ApiResponse,
+  BotEditorInput,
+  BotListItem,
+  BotProfile,
+  RoleEditorInput,
+  RoleProfile,
+} from '@zakobot/shared'
 
 export class ApiServer {
   private server: http.Server
+  private started = false
 
   constructor(
     private db: DB,
@@ -20,9 +37,30 @@ export class ApiServer {
   }
 
   async start() {
-    const port = Number(process.env.CORE_API_PORT ?? 3001)
+    const port = Number(process.env.CORE_API_PORT ?? 6325)
     await new Promise<void>((resolve) => this.server.listen(port, '127.0.0.1', resolve))
+    this.started = true
     console.log(`[ApiServer] Listening on 127.0.0.1:${port}`)
+  }
+
+  async stop() {
+    if (!this.started) {
+      return
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      this.server.close((error) => {
+        if (error) {
+          reject(error)
+          return
+        }
+
+        resolve()
+      })
+    })
+
+    this.started = false
+    console.log('[ApiServer] Stopped.')
   }
 
   private json<T>(res: http.ServerResponse, data: ApiResponse<T>, status = 200) {
@@ -55,6 +93,44 @@ export class ApiServer {
     }
   }
 
+  private toBotProfile(row: NonNullable<ReturnType<typeof getBotWithRole>>): BotProfile {
+    return {
+      id: row.instance.id,
+      name: row.instance.name,
+      platform: row.instance.platform,
+      token: row.instance.token,
+      roleId: row.instance.roleId,
+      roleName: row.role.name,
+      llmProvider: row.instance.llmProvider as 'openai',
+      llmPlatformName: row.instance.llmPlatformName,
+      llmModel: row.instance.llmModel,
+      llmApiKey: row.instance.llmApiKey,
+      llmBaseUrl: row.instance.llmBaseUrl,
+      discordUserId: row.instance.discordUserId,
+      discordGuildId: row.instance.discordGuildId,
+      enabled: row.instance.enabled,
+      createdAt: row.instance.createdAt.toISOString(),
+      updatedAt: row.instance.updatedAt.toISOString(),
+    }
+  }
+
+  private toBotListItem(row: NonNullable<ReturnType<typeof getBotWithRole>>): BotListItem {
+    return {
+      id: row.instance.id,
+      name: row.instance.name,
+      platform: row.instance.platform,
+      roleId: row.instance.roleId,
+      roleName: row.role.name,
+      llmPlatformName: row.instance.llmPlatformName,
+      llmModel: row.instance.llmModel,
+      discordUserId: row.instance.discordUserId,
+      discordGuildId: row.instance.discordGuildId,
+      enabled: row.instance.enabled,
+      createdAt: row.instance.createdAt.toISOString(),
+      updatedAt: row.instance.updatedAt.toISOString(),
+    }
+  }
+
   private parseRoleInput(body: Partial<RoleEditorInput>) {
     const name = body.name?.trim()
     const systemPrompt = body.systemPrompt?.trim()
@@ -71,6 +147,46 @@ export class ApiServer {
       avatar: body.avatar?.trim() ?? '',
       name,
       systemPrompt,
+    }
+  }
+
+  private parseBotInput(body: Partial<BotEditorInput>) {
+    const name = body.name?.trim()
+    const token = body.token?.trim()
+    const roleId = body.roleId?.trim()
+    const llmPlatformName = body.llmPlatformName?.trim()
+    const llmModel = body.llmModel?.trim()
+    const llmApiKey = body.llmApiKey?.trim()
+    const llmBaseUrl = body.llmBaseUrl?.trim()
+    const discordUserId = body.discordUserId?.trim()
+    const discordGuildId = body.discordGuildId?.trim()
+    const platform = body.platform?.trim()
+
+    if (!name) throw new Error('Bot name is required')
+    if (!platform) throw new Error('Bot platform is required')
+    if (platform !== 'discord') throw new Error('Only Discord bots are currently supported')
+    if (!token) throw new Error('Bot token is required')
+    if (!roleId) throw new Error('Role is required')
+    if (!llmPlatformName) throw new Error('Model platform is required')
+    if (!llmModel) throw new Error('Model is required')
+    if (!llmApiKey) throw new Error('Model API key is required')
+    if (!llmBaseUrl) throw new Error('Model base URL is required')
+    if (!discordUserId) throw new Error('Discord user ID is required')
+    if (!discordGuildId) throw new Error('Discord guild ID is required')
+
+    return {
+      name,
+      platform: 'discord' as const,
+      token,
+      roleId,
+      llmProvider: 'openai' as const,
+      llmPlatformName,
+      llmModel,
+      llmApiKey,
+      llmBaseUrl,
+      discordUserId,
+      discordGuildId,
+      enabled: Boolean(body.enabled),
     }
   }
 
@@ -124,6 +240,56 @@ export class ApiServer {
       }
     }
 
+    if (pathname === '/bots' && req.method === 'GET') {
+      return this.json(res, {
+        ok: true,
+        data: listBotsWithRoles(this.db).map(row => this.toBotListItem(row)),
+      })
+    }
+
+    if (pathname === '/bots' && req.method === 'POST') {
+      try {
+        const payload = this.parseBotInput(await this.readJson<BotEditorInput>(req))
+
+        if (!getRole(this.db, payload.roleId)) {
+          return this.json(res, { ok: false, error: 'Role not found' }, 404)
+        }
+
+        const now = new Date()
+        const created = createBot(this.db, {
+          id: randomUUID(),
+          name: payload.name,
+          platform: payload.platform,
+          token: payload.token,
+          roleId: payload.roleId,
+          llmProvider: payload.llmProvider,
+          llmPlatformName: payload.llmPlatformName,
+          llmModel: payload.llmModel,
+          llmApiKey: payload.llmApiKey,
+          llmBaseUrl: payload.llmBaseUrl,
+          discordUserId: payload.discordUserId,
+          discordGuildId: payload.discordGuildId,
+          enabled: payload.enabled,
+          createdAt: now,
+          updatedAt: now,
+        })
+
+        if (!created) {
+          throw new Error('Failed to create bot')
+        }
+
+        await this.botManager.syncInstance(created.instance.id).catch((error) => {
+          console.error(`[ApiServer] Failed to sync bot "${created.instance.name}":`, error)
+        })
+
+        return this.json(res, { ok: true, data: this.toBotProfile(created) }, 201)
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid request body'
+        return this.json(res, { ok: false, error: message }, 400)
+      }
+    }
+
     const roleMatch = pathname.match(/^\/roles\/([^/]+)$/)
     if (roleMatch && req.method === 'GET') {
       const role = getRole(this.db, roleMatch[1])
@@ -152,6 +318,63 @@ export class ApiServer {
         })
 
         return this.json(res, { ok: true, data: this.toRoleProfile(updated!) })
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid request body'
+        return this.json(res, { ok: false, error: message }, 400)
+      }
+    }
+
+    const botMatch = pathname.match(/^\/bots\/([^/]+)$/)
+    if (botMatch && req.method === 'GET') {
+      const bot = getBotWithRole(this.db, botMatch[1])
+
+      if (!bot) {
+        return this.json(res, { ok: false, error: 'Bot not found' }, 404)
+      }
+
+      return this.json(res, { ok: true, data: this.toBotProfile(bot) })
+    }
+
+    if (botMatch && req.method === 'PUT') {
+      const existing = getBotWithRole(this.db, botMatch[1])
+
+      if (!existing) {
+        return this.json(res, { ok: false, error: 'Bot not found' }, 404)
+      }
+
+      try {
+        const payload = this.parseBotInput(await this.readJson<BotEditorInput>(req))
+
+        if (!getRole(this.db, payload.roleId)) {
+          return this.json(res, { ok: false, error: 'Role not found' }, 404)
+        }
+
+        const updated = updateBot(this.db, botMatch[1], {
+          name: payload.name,
+          platform: payload.platform,
+          token: payload.token,
+          roleId: payload.roleId,
+          llmProvider: payload.llmProvider,
+          llmPlatformName: payload.llmPlatformName,
+          llmModel: payload.llmModel,
+          llmApiKey: payload.llmApiKey,
+          llmBaseUrl: payload.llmBaseUrl,
+          discordUserId: payload.discordUserId,
+          discordGuildId: payload.discordGuildId,
+          enabled: payload.enabled,
+          updatedAt: new Date(),
+        })
+
+        if (!updated) {
+          throw new Error('Failed to update bot')
+        }
+
+        await this.botManager.syncInstance(updated.instance.id).catch((error) => {
+          console.error(`[ApiServer] Failed to sync bot "${updated.instance.name}":`, error)
+        })
+
+        return this.json(res, { ok: true, data: this.toBotProfile(updated) })
       }
       catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid request body'

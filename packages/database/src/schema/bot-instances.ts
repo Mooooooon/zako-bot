@@ -6,6 +6,13 @@ export const botInstances = sqliteTable('bot_instances', {
   name: text('name').notNull(),
   platform: text('platform', { enum: ['discord', 'qq'] }).notNull(),
   token: text('token').notNull(),
+  llmProvider: text('llm_provider').notNull().default('openai'),
+  llmPlatformName: text('llm_platform_name').notNull().default(''),
+  llmModel: text('llm_model').notNull().default(''),
+  llmApiKey: text('llm_api_key').notNull().default(''),
+  llmBaseUrl: text('llm_base_url').notNull().default(''),
+  discordUserId: text('discord_user_id').notNull().default(''),
+  discordGuildId: text('discord_guild_id').notNull().default(''),
   roleId: text('role_id')
     .notNull()
     .references(() => roles.id, { onDelete: 'restrict' }),

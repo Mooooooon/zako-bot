@@ -28,10 +28,12 @@ export class DiscordAdapter {
   private async handleMessage(msg: import('discord.js').Message) {
     if (msg.author.bot) return
 
-    const isDM = msg.channel.isDMBased()
+    if (this.instance.discordUserId && msg.author.id !== this.instance.discordUserId) return
+    if (this.instance.discordGuildId && msg.guildId !== this.instance.discordGuildId) return
+
     const isMentioned = this.client.user && msg.mentions.has(this.client.user)
 
-    if (this.instance.requireMention && !isMentioned && !isDM) return
+    if (this.instance.requireMention && !isMentioned) return
 
     // Strip the @mention prefix from the message
     const userText = msg.content
@@ -66,7 +68,7 @@ export class DiscordAdapter {
   }
 
   async stop() {
-    await this.client.destroy()
+    this.client.destroy()
     console.log(`[Discord] "${this.instance.name}" disconnected.`)
   }
 

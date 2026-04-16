@@ -28,7 +28,7 @@ program
 
 program
   .command('panel')
-  .description('Start the web panel (http://localhost:3000)')
+  .description('Start the web panel (http://localhost:6324)')
   .action(() => { runPackage('panel') })
 
 program
@@ -48,8 +48,8 @@ function cmdInit() {
   if (!existsSync(envFile)) {
     writeFileSync(envFile, [
       '# ZakoBot configuration',
-      '# CORE_API_PORT=3001',
-      '# PANEL_PORT=3000',
+      '# CORE_API_PORT=6325',
+      '# PANEL_PORT=6324',
     ].join('\n') + '\n')
   }
 
@@ -57,7 +57,7 @@ function cmdInit() {
   console.log('')
   console.log('Next steps:')
   console.log('  1. Run: zakobot start')
-  console.log('  2. Open: http://localhost:3000')
+  console.log('  2. Open: http://localhost:6324')
   console.log('  3. Add a Bot and configure your LLM in the panel')
 }
 

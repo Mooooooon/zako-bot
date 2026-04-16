@@ -65,6 +65,14 @@ export class PluginLoader {
     console.log(`[PluginLoader] Unloaded: ${name}`)
   }
 
+  async unloadAll() {
+    const pluginNames = [...this.plugins.keys()]
+
+    for (const name of pluginNames) {
+      await this.unload(name)
+    }
+  }
+
   list() {
     return [...this.plugins.values()].map((p) => ({
       name: p.meta.name,

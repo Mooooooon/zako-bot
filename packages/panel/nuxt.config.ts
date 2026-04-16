@@ -49,12 +49,12 @@ export default defineNuxtConfig({
   },
 
   runtimeConfig: {
-    coreApiUrl: process.env.CORE_API_URL ?? 'http://127.0.0.1:3001',
+    coreApiUrl: process.env.CORE_API_URL ?? 'http://127.0.0.1:6325',
     public: {},
   },
 
   devServer: {
-    port: 3000,
+    port: Number(process.env.PANEL_PORT ?? process.env.NUXT_PORT ?? 6324),
   },
 
   modules: ['@nuxt/ui'],

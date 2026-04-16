@@ -26,13 +26,41 @@ export class BotManager {
     await this.startInstance(row)
   }
 
+  async syncInstance(instanceId: string) {
+    const row = getBotWithRole(this.db, instanceId)
+
+    if (!row || !row.instance.enabled) {
+      await this.stopOne(instanceId)
+      return
+    }
+
+    if (this.adapters.has(instanceId)) {
+      await this.stopOne(instanceId)
+    }
+
+    await this.startInstance(row)
+  }
+
   private async startInstance(row: { instance: BotInstanceRow; role: RoleRow }) {
     if (row.instance.platform !== 'discord') {
       console.warn(`[BotManager] Platform "${row.instance.platform}" not yet supported, skipping.`)
       return
     }
 
-    const agent = new Agent(row.role, this.store)
+    if (!row.instance.llmModel || !row.instance.llmApiKey || !row.instance.llmBaseUrl) {
+      throw new Error(`Bot "${row.instance.name}" is missing LLM configuration`)
+    }
+
+    if (this.adapters.has(row.instance.id)) {
+      await this.stopOne(row.instance.id)
+    }
+
+    const agent = new Agent(row.role, {
+      provider: row.instance.llmProvider as 'openai',
+      model: row.instance.llmModel,
+      apiKey: row.instance.llmApiKey,
+      baseUrl: row.instance.llmBaseUrl,
+    }, this.store)
     const adapter = new DiscordAdapter(row.instance, row.role, agent)
 
     await adapter.start()
@@ -44,6 +72,14 @@ export class BotManager {
     if (!adapter) return
     await adapter.stop()
     this.adapters.delete(instanceId)
+  }
+
+  async stopAll() {
+    const instanceIds = [...this.adapters.keys()]
+
+    for (const instanceId of instanceIds) {
+      await this.stopOne(instanceId)
+    }
   }
 
   async sendMessage(instanceId: string, channelId: string, content: string) {

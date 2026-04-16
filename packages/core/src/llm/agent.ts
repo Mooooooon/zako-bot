@@ -1,5 +1,5 @@
 import type { RoleRow } from '@zakobot/database'
-import type { LLMTool } from '@zakobot/shared'
+import type { LLMConfig, LLMTool } from '@zakobot/shared'
 import { LLMClient } from './client.js'
 import { ConversationStore } from './conversation-store.js'
 
@@ -8,13 +8,8 @@ export class Agent {
   private store: ConversationStore
   private tools: LLMTool[] = []
 
-  constructor(private role: RoleRow, store: ConversationStore) {
-    this.client = new LLMClient({
-      provider: role.llmProvider as 'openai',
-      model: role.llmModel,
-      apiKey: role.llmApiKey,
-      baseUrl: role.llmBaseUrl ?? undefined,
-    })
+  constructor(private role: RoleRow, llmConfig: LLMConfig, store: ConversationStore) {
+    this.client = new LLMClient(llmConfig)
     this.store = store
   }
 
