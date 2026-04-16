@@ -12,6 +12,8 @@ export interface LLMConfig {
 export interface LLMTool {
   name: string
   description: string
+  /** Prompt instructions injected when this tool is enabled for a role. */
+  instructions?: string
   parameters: Record<string, unknown>
   execute: (args: Record<string, unknown>) => Promise<string>
 }

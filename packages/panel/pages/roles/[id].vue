@@ -14,7 +14,7 @@
     <RoleEditorForm
       v-else-if="role"
       title="编辑角色"
-      description="修改头像、名称和提示词。"
+      description="修改头像、名称、提示词和工具权限。"
       submit-label="保存修改"
       :initial-value="form"
       :pending="saving || deleting"
@@ -54,6 +54,7 @@ const form = computed<RoleEditorInput>(() => ({
   avatar: role.value?.avatar ?? '',
   name: role.value?.name ?? '',
   systemPrompt: role.value?.systemPrompt ?? '',
+  enabledTools: role.value?.enabledTools ?? [],
 }))
 
 async function handleSubmit(payload: RoleEditorInput) {

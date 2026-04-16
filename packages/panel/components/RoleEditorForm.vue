@@ -107,6 +107,36 @@
         />
       </UFormField>
 
+      <UFormField
+        label="工具权限"
+        name="enabledTools"
+        description="允许模型在需要时调用外部能力。"
+      >
+        <div class="space-y-3">
+          <label
+            v-for="tool in availableTools"
+            :key="tool.value"
+            class="flex items-start gap-3"
+          >
+            <input
+              v-model="state.enabledTools"
+              class="mt-1 size-4 accent-[var(--ui-primary)]"
+              type="checkbox"
+              :value="tool.value"
+              :disabled="pending"
+            >
+            <span class="min-w-0">
+              <span class="block text-sm font-medium text-[var(--text-primary)]">
+                {{ tool.label }}
+              </span>
+              <span class="block text-sm text-[var(--text-secondary)]">
+                {{ tool.description }}
+              </span>
+            </span>
+          </label>
+        </div>
+      </UFormField>
+
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div v-if="$slots['actions-left']" class="flex flex-wrap gap-2">
           <slot name="actions-left" />
@@ -132,7 +162,7 @@
 </template>
 
 <script setup lang="ts">
-import type { RoleEditorInput } from '@zakobot/shared'
+import type { BuiltinTool, RoleEditorInput } from '@zakobot/shared'
 
 const props = defineProps<{
   title: string
@@ -150,7 +180,25 @@ const state = reactive<RoleEditorInput>({
   avatar: '',
   name: '',
   systemPrompt: '',
+  enabledTools: [],
 })
+
+const availableTools: Array<{
+  value: BuiltinTool
+  label: string
+  description: string
+}> = [
+  {
+    value: 'web_search',
+    label: '网页搜索',
+    description: '通过搜索引擎获取公开网页结果。',
+  },
+  {
+    value: 'web_browse',
+    label: '网页浏览',
+    description: '读取公开网页正文，用于摘要和引用。',
+  },
+]
 
 const avatarUploadFile = ref<File | null>(null)
 const avatarUploadPending = ref(false)
@@ -167,6 +215,7 @@ watch(
     state.avatar = value.avatar
     state.name = value.name
     state.systemPrompt = value.systemPrompt
+    state.enabledTools = [...value.enabledTools]
     avatarUploadFile.value = null
     avatarUploadError.value = ''
   },
@@ -206,6 +255,7 @@ function handleSubmit() {
     avatar: state.avatar.trim(),
     name: state.name.trim(),
     systemPrompt: state.systemPrompt.trim(),
+    enabledTools: [...state.enabledTools],
   })
 }
 

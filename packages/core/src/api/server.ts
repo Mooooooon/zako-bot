@@ -15,6 +15,7 @@ import {
 import type { DB, RoleRow } from '@zakobot/database'
 import type { BotManager } from '../bot/bot-manager.js'
 import type { PluginLoader } from '../plugins/loader.js'
+import { getSearchSettings, saveSearchSettings } from '../settings/search-settings.js'
 import type {
   ApiResponse,
   BotEditorInput,
@@ -25,6 +26,8 @@ import type {
   CreateConversationTopicInput,
   RoleEditorInput,
   RoleProfile,
+  BuiltinTool,
+  SearchSettings,
   SendConversationMessageInput,
   SendConversationMessageResult,
 } from '@zakobot/shared'
@@ -95,6 +98,7 @@ export class ApiServer {
       avatar: row.avatar,
       name: row.name,
       systemPrompt: row.systemPrompt,
+      enabledTools: this.parseEnabledTools(row.enabledTools),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     }
@@ -185,10 +189,13 @@ export class ApiServer {
       throw new Error('Role systemPrompt is required')
     }
 
+    const enabledTools = this.normalizeEnabledTools(body.enabledTools)
+
     return {
       avatar: body.avatar?.trim() ?? '',
       name,
       systemPrompt,
+      enabledTools,
     }
   }
 
@@ -262,6 +269,13 @@ export class ApiServer {
     }
   }
 
+  private parseSearchSettingsInput(body: Partial<SearchSettings>): SearchSettings {
+    return {
+      provider: body.provider === 'tavily' ? 'tavily' : 'google_web',
+      tavilyApiKey: body.tavilyApiKey?.trim() ?? '',
+    }
+  }
+
   private parseJsonRecord(value: string): Record<string, unknown> {
     try {
       const parsed = JSON.parse(value) as Record<string, unknown>
@@ -270,6 +284,26 @@ export class ApiServer {
     catch {
       return {}
     }
+  }
+
+  private parseEnabledTools(value: string): BuiltinTool[] {
+    try {
+      return this.normalizeEnabledTools(JSON.parse(value) as unknown)
+    }
+    catch {
+      return []
+    }
+  }
+
+  private normalizeEnabledTools(value: unknown): BuiltinTool[] {
+    if (!Array.isArray(value)) {
+      return []
+    }
+
+    const allowed = new Set<BuiltinTool>(['web_search', 'web_browse'])
+    return [...new Set(value)].filter((tool): tool is BuiltinTool =>
+      typeof tool === 'string' && allowed.has(tool as BuiltinTool),
+    )
   }
 
   private async handle(req: http.IncomingMessage, res: http.ServerResponse) {
@@ -293,6 +327,21 @@ export class ApiServer {
       return this.json(res, { ok: true, data: this.pluginLoader.list() })
     }
 
+    if (pathname === '/settings/search' && req.method === 'GET') {
+      return this.json(res, { ok: true, data: getSearchSettings(this.db) })
+    }
+
+    if (pathname === '/settings/search' && req.method === 'PUT') {
+      try {
+        const payload = this.parseSearchSettingsInput(await this.readJson<SearchSettings>(req))
+        return this.json(res, { ok: true, data: saveSearchSettings(this.db, payload) })
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid request body'
+        return this.json(res, { ok: false, error: message }, 400)
+      }
+    }
+
     if (pathname === '/roles' && req.method === 'GET') {
       return this.json(res, { ok: true, data: listRoles(this.db).map(row => this.toRoleProfile(row)) })
     }
@@ -310,7 +359,7 @@ export class ApiServer {
           llmModel: '',
           llmApiKey: '',
           llmBaseUrl: null,
-          enabledTools: '[]',
+          enabledTools: JSON.stringify(payload.enabledTools),
           createdAt: now,
           updatedAt: now,
         })
@@ -450,6 +499,7 @@ export class ApiServer {
           avatar: payload.avatar,
           name: payload.name,
           systemPrompt: payload.systemPrompt,
+          enabledTools: JSON.stringify(payload.enabledTools),
           updatedAt: new Date(),
         })
 

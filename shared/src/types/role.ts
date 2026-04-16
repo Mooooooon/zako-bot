@@ -6,6 +6,8 @@ export interface RoleEditorInput {
   avatar: string
   name: string
   systemPrompt: string
+  /** Which built-in tools this role is allowed to use */
+  enabledTools: BuiltinTool[]
 }
 
 export interface RoleProfile extends RoleEditorInput {

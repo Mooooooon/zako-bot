@@ -19,6 +19,7 @@ const form: RoleEditorInput = {
   avatar: '',
   name: '',
   systemPrompt: '',
+  enabledTools: [],
 }
 
 async function handleSubmit(payload: RoleEditorInput) {

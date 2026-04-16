@@ -41,6 +41,13 @@ const settingItems = [
     to: '/settings/models',
     match: '/settings/models',
   },
+  {
+    label: '搜索设置',
+    icon: 'i-heroicons-magnifying-glass-20-solid',
+    value: 'search',
+    to: '/settings/search',
+    match: '/settings/search',
+  },
 ] as const
 
 const activeTab = computed(() =>

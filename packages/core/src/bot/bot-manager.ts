@@ -10,12 +10,16 @@ import { getEnabledBots, getBotWithRole } from '@zakobot/database'
 import { DiscordAdapter } from './discord-adapter.js'
 import { Agent } from '../llm/agent.js'
 import { ConversationService } from '../llm/conversation-service.js'
+import type { ToolRegistry } from '../tools/index.js'
 
 export class BotManager {
   private adapters = new Map<string, DiscordAdapter>()
   private conversations: ConversationService
 
-  constructor(private db: DB) {
+  constructor(
+    private db: DB,
+    private toolRegistry: ToolRegistry,
+  ) {
     this.conversations = new ConversationService(db)
   }
 
@@ -186,12 +190,17 @@ export class BotManager {
   }
 
   private createAgent(row: { instance: BotInstanceRow; role: RoleRow }) {
-    return new Agent(row.role, {
-      provider: row.instance.llmProvider as 'openai',
-      model: row.instance.llmModel,
-      apiKey: row.instance.llmApiKey,
-      baseUrl: row.instance.llmBaseUrl,
-    }, this.conversations)
+    return new Agent(
+      row.role,
+      {
+        provider: row.instance.llmProvider as 'openai',
+        model: row.instance.llmModel,
+        apiKey: row.instance.llmApiKey,
+        baseUrl: row.instance.llmBaseUrl,
+      },
+      this.conversations,
+      this.toolRegistry,
+    )
   }
 
   private requireBotRow(instanceId: string) {

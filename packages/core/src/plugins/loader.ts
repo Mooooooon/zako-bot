@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url'
 import type { Plugin, PluginContext } from '@zakobot/shared'
 import type { BotManager } from '../bot/bot-manager.js'
 import { SchedulerService } from './scheduler.js'
+import type { ToolRegistry } from '../tools/index.js'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
@@ -11,7 +12,10 @@ export class PluginLoader {
   private plugins = new Map<string, Plugin>()
   private scheduler = new SchedulerService()
 
-  constructor(private botManager: BotManager) {}
+  constructor(
+    private botManager: BotManager,
+    private toolRegistry: ToolRegistry,
+  ) {}
 
   private buildContext(pluginName: string): PluginContext {
     return {
@@ -23,6 +27,10 @@ export class PluginLoader {
       },
       schedule: (cronExpr, fn) => this.scheduler.register(pluginName, cronExpr, fn),
       getConfig: (_key) => undefined, // TODO: wire up database config
+      registerTool: (tool) => this.toolRegistry.register(tool, {
+        source: 'plugin',
+        owner: pluginName,
+      }),
     }
   }
 
@@ -61,6 +69,7 @@ export class PluginLoader {
     if (!plugin) return
     await plugin.onUnload?.()
     this.scheduler.unregisterAll(name)
+    this.toolRegistry.unregisterOwner(name)
     this.plugins.delete(name)
     console.log(`[PluginLoader] Unloaded: ${name}`)
   }

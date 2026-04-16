@@ -1,3 +1,5 @@
+import type { LLMTool } from './llm.js'
+
 export interface PluginMeta {
   name: string
   version: string
@@ -12,6 +14,8 @@ export interface PluginContext {
   schedule: (cronExpr: string, fn: () => void | Promise<void>) => void
   /** Access plugin-scoped config */
   getConfig: <T = unknown>(key: string) => T | undefined
+  /** Register an LLM tool exposed by this plugin */
+  registerTool: (tool: LLMTool) => void
 }
 
 export interface Plugin {
