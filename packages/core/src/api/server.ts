@@ -3,6 +3,8 @@ import { randomUUID } from 'crypto'
 import {
   createBot,
   createRole,
+  deleteBot,
+  deleteRole,
   getBotWithRole,
   getRole,
   listBotsWithRoles,
@@ -325,6 +327,25 @@ export class ApiServer {
       }
     }
 
+    if (roleMatch && req.method === 'DELETE') {
+      const existing = getRole(this.db, roleMatch[1])
+
+      if (!existing) {
+        return this.json(res, { ok: false, error: 'Role not found' }, 404)
+      }
+
+      try {
+        deleteRole(this.db, roleMatch[1])
+        return this.json(res, { ok: true, data: this.toRoleProfile(existing) })
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to delete role'
+        const status = message.includes('FOREIGN KEY constraint failed') ? 409 : 400
+        const userMessage = status === 409 ? 'Role is still used by existing bots' : message
+        return this.json(res, { ok: false, error: userMessage }, status)
+      }
+    }
+
     const botMatch = pathname.match(/^\/bots\/([^/]+)$/)
     if (botMatch && req.method === 'GET') {
       const bot = getBotWithRole(this.db, botMatch[1])
@@ -378,6 +399,24 @@ export class ApiServer {
       }
       catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid request body'
+        return this.json(res, { ok: false, error: message }, 400)
+      }
+    }
+
+    if (botMatch && req.method === 'DELETE') {
+      const existing = getBotWithRole(this.db, botMatch[1])
+
+      if (!existing) {
+        return this.json(res, { ok: false, error: 'Bot not found' }, 404)
+      }
+
+      try {
+        await this.botManager.stopOne(botMatch[1])
+        deleteBot(this.db, botMatch[1])
+        return this.json(res, { ok: true, data: this.toBotProfile(existing) })
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to delete bot'
         return this.json(res, { ok: false, error: message }, 400)
       }
     }

@@ -60,7 +60,7 @@
 <script setup lang="ts">
 import { h, resolveComponent } from 'vue'
 import type { TableColumn } from '@nuxt/ui'
-import type { BotListItem } from '@zakobot/shared'
+import type { BotListItem, BotProfile } from '@zakobot/shared'
 
 type BotRow = {
   id: string
@@ -72,10 +72,12 @@ type BotRow = {
   enabled: boolean
 }
 
-const { data, pending, error } = await useFetch<{ ok: true, data: BotListItem[] }>('/api/bots')
+const toast = useToast()
+const { data, pending, error, refresh } = await useFetch<{ ok: true, data: BotListItem[] }>('/api/bots')
 
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
+const deletingId = ref('')
 
 const botRows = computed<BotRow[]>(() => (data.value?.data ?? []).map(bot => ({
   id: bot.id,
@@ -126,16 +128,52 @@ const columns: TableColumn<BotRow>[] = [
     id: 'actions',
     header: '',
     cell: ({ row }) =>
-      h(UButton, {
-        label: '编辑',
-        color: 'neutral',
-        variant: 'outline',
-        to: `/bots/${row.original.id}`,
-      }),
+      h('div', { class: 'flex flex-wrap justify-end gap-2' }, [
+        h(UButton, {
+          label: '编辑',
+          color: 'neutral',
+          variant: 'outline',
+          to: `/bots/${row.original.id}`,
+        }),
+        h(UButton, {
+          label: deletingId.value === row.original.id ? '删除中' : '删除',
+          color: 'error',
+          variant: 'outline',
+          loading: deletingId.value === row.original.id,
+          disabled: deletingId.value.length > 0,
+          onClick: () => handleDelete(row.original),
+        }),
+      ]),
   },
 ]
 
 function openNewBot() {
   return navigateTo('/bots/new')
+}
+
+async function handleDelete(bot: BotRow) {
+  if (import.meta.client && !window.confirm(`确认删除机器人「${bot.name}」？此操作不可恢复。`)) {
+    return
+  }
+
+  deletingId.value = bot.id
+
+  try {
+    const deleted = await $fetch<{ ok: true, data: BotProfile }>(`/api/bots/${bot.id}`, {
+      method: 'DELETE',
+    })
+
+    toast.add({ title: `已删除机器人「${deleted.data.name}」`, color: 'success' })
+    await refresh()
+  }
+  catch (error: any) {
+    toast.add({
+      title: error?.data?.statusMessage ?? error?.message ?? '删除机器人失败',
+      color: 'error',
+    })
+  }
+  finally {
+    deletingId.value = ''
+  }
 }
 </script>

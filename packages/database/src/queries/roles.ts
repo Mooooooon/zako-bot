@@ -32,3 +32,10 @@ export function updateRole(db: DB, id: string, values: Partial<typeof roles.$inf
 
   return getRole(db, id)
 }
+
+export function deleteRole(db: DB, id: string) {
+  return db
+    .delete(roles)
+    .where(eq(roles.id, id))
+    .run()
+}

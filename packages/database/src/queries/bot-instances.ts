@@ -51,3 +51,10 @@ export function updateBot(db: DB, id: string, values: Partial<typeof botInstance
 
   return getBotWithRole(db, id)
 }
+
+export function deleteBot(db: DB, id: string) {
+  return db
+    .delete(botInstances)
+    .where(eq(botInstances.id, id))
+    .run()
+}

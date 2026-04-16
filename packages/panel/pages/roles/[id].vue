@@ -17,9 +17,21 @@
       description="修改头像、名称和提示词。"
       submit-label="保存修改"
       :initial-value="form"
-      :pending="saving"
+      :pending="saving || deleting"
       @submit="handleSubmit"
-    />
+    >
+      <template #actions-left>
+        <UButton
+          label="删除角色"
+          color="error"
+          variant="outline"
+          type="button"
+          :loading="deleting"
+          :disabled="saving || deleting"
+          @click="handleDelete"
+        />
+      </template>
+    </RoleEditorForm>
   </div>
 </template>
 
@@ -35,6 +47,7 @@ const { data, pending, error, refresh } = await useFetch<{ ok: true, data: RoleP
 )
 
 const saving = ref(false)
+const deleting = ref(false)
 
 const role = computed(() => data.value?.data ?? null)
 const form = computed<RoleEditorInput>(() => ({
@@ -64,6 +77,32 @@ async function handleSubmit(payload: RoleEditorInput) {
   }
   finally {
     saving.value = false
+  }
+}
+
+async function handleDelete() {
+  if (!role.value || (import.meta.client && !window.confirm(`确认删除角色「${role.value.name}」？此操作不可恢复。`))) {
+    return
+  }
+
+  deleting.value = true
+
+  try {
+    const deleted = await $fetch<{ ok: true, data: RoleProfile }>(`/api/roles/${roleId.value}`, {
+      method: 'DELETE',
+    })
+
+    toast.add({ title: `已删除角色「${deleted.data.name}」`, color: 'success' })
+    await navigateTo('/roles')
+  }
+  catch (error: any) {
+    toast.add({
+      title: error?.data?.statusMessage ?? error?.message ?? '删除角色失败',
+      color: 'error',
+    })
+  }
+  finally {
+    deleting.value = false
   }
 }
 </script>

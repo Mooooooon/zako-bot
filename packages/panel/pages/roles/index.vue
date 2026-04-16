@@ -69,10 +69,12 @@ type RoleRow = {
   systemPrompt: string
 }
 
-const { data, pending, error } = await useFetch<{ ok: true, data: RoleProfile[] }>('/api/roles')
+const toast = useToast()
+const { data, pending, error, refresh } = await useFetch<{ ok: true, data: RoleProfile[] }>('/api/roles')
 
 const UAvatar = resolveComponent('UAvatar')
 const UButton = resolveComponent('UButton')
+const deletingId = ref('')
 
 const roleRows = computed<RoleRow[]>(() => (data.value?.data ?? []).map(role => ({
   id: role.id,
@@ -115,16 +117,52 @@ const columns: TableColumn<RoleRow>[] = [
     id: 'actions',
     header: '',
     cell: ({ row }) =>
-      h(UButton, {
-        label: '编辑',
-        color: 'neutral',
-        variant: 'outline',
-        to: `/roles/${row.original.id}`,
-      }),
+      h('div', { class: 'flex flex-wrap justify-end gap-2' }, [
+        h(UButton, {
+          label: '编辑',
+          color: 'neutral',
+          variant: 'outline',
+          to: `/roles/${row.original.id}`,
+        }),
+        h(UButton, {
+          label: deletingId.value === row.original.id ? '删除中' : '删除',
+          color: 'error',
+          variant: 'outline',
+          loading: deletingId.value === row.original.id,
+          disabled: deletingId.value.length > 0,
+          onClick: () => handleDelete(row.original),
+        }),
+      ]),
   },
 ]
 
 function openNewRole() {
   return navigateTo('/roles/new')
+}
+
+async function handleDelete(role: RoleRow) {
+  if (import.meta.client && !window.confirm(`确认删除角色「${role.name}」？此操作不可恢复。`)) {
+    return
+  }
+
+  deletingId.value = role.id
+
+  try {
+    const deleted = await $fetch<{ ok: true, data: RoleProfile }>(`/api/roles/${role.id}`, {
+      method: 'DELETE',
+    })
+
+    toast.add({ title: `已删除角色「${deleted.data.name}」`, color: 'success' })
+    await refresh()
+  }
+  catch (error: any) {
+    toast.add({
+      title: error?.data?.statusMessage ?? error?.message ?? '删除角色失败',
+      color: 'error',
+    })
+  }
+  finally {
+    deletingId.value = ''
+  }
 }
 </script>

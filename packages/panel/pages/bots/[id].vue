@@ -18,9 +18,21 @@
       submit-label="保存修改"
       :initial-value="form"
       :role-options="roleOptions"
-      :pending="saving"
+      :pending="saving || deleting"
       @submit="handleSubmit"
-    />
+    >
+      <template #actions-left>
+        <UButton
+          label="删除机器人"
+          color="error"
+          variant="outline"
+          type="button"
+          :loading="deleting"
+          :disabled="saving || deleting"
+          @click="handleDelete"
+        />
+      </template>
+    </BotEditorForm>
   </div>
 </template>
 
@@ -43,6 +55,7 @@ const { data, pending, error, refresh } = botState
 const { data: rolesData, error: rolesError } = rolesState
 
 const saving = ref(false)
+const deleting = ref(false)
 
 const bot = computed(() => data.value?.data ?? null)
 const roleOptions = computed(() =>
@@ -89,6 +102,32 @@ async function handleSubmit(payload: BotEditorInput) {
   }
   finally {
     saving.value = false
+  }
+}
+
+async function handleDelete() {
+  if (!bot.value || (import.meta.client && !window.confirm(`确认删除机器人「${bot.value.name}」？此操作不可恢复。`))) {
+    return
+  }
+
+  deleting.value = true
+
+  try {
+    const deleted = await $fetch<{ ok: true, data: BotProfile }>(`/api/bots/${botId.value}`, {
+      method: 'DELETE',
+    })
+
+    toast.add({ title: `已删除机器人「${deleted.data.name}」`, color: 'success' })
+    await navigateTo('/bots')
+  }
+  catch (error: any) {
+    toast.add({
+      title: error?.data?.statusMessage ?? error?.message ?? '删除机器人失败',
+      color: 'error',
+    })
+  }
+  finally {
+    deleting.value = false
   }
 }
 </script>

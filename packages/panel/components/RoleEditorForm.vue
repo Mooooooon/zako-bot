@@ -107,19 +107,25 @@
         />
       </UFormField>
 
-      <div class="flex flex-wrap justify-end gap-2">
-        <UButton
-          label="返回列表"
-          color="neutral"
-          variant="outline"
-          to="/roles"
-        />
-        <UButton
-          :label="submitLabel"
-          type="submit"
-          :loading="pending"
-          :disabled="!canSubmit || avatarUploadPending"
-        />
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div v-if="$slots['actions-left']" class="flex flex-wrap gap-2">
+          <slot name="actions-left" />
+        </div>
+
+        <div class="ml-auto flex flex-wrap justify-end gap-2">
+          <UButton
+            label="返回列表"
+            color="neutral"
+            variant="outline"
+            to="/roles"
+          />
+          <UButton
+            :label="submitLabel"
+            type="submit"
+            :loading="pending"
+            :disabled="!canSubmit || avatarUploadPending"
+          />
+        </div>
       </div>
     </form>
   </UCard>

@@ -1,10 +1,20 @@
+class CoreApiError extends Error {
+  statusCode: number
+
+  constructor(message: string, statusCode: number) {
+    super(message)
+    this.name = 'CoreApiError'
+    this.statusCode = statusCode
+  }
+}
+
 async function coreRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const config = useRuntimeConfig()
   const res = await fetch(`${config.coreApiUrl}${path}`, init)
   const json = (await res.json()) as { data?: T, error?: string }
 
   if (!res.ok) {
-    throw new Error(json.error ?? `Core API error: ${res.status}`)
+    throw new CoreApiError(json.error ?? `Core API error: ${res.status}`, res.status)
   }
 
   if (typeof json.data === 'undefined') {
@@ -38,4 +48,10 @@ async function corePut<T>(path: string, body: unknown): Promise<T> {
   })
 }
 
-export { coreGet, corePost, corePut }
+async function coreDelete<T>(path: string): Promise<T> {
+  return coreRequest<T>(path, {
+    method: 'DELETE',
+  })
+}
+
+export { coreDelete, coreGet, corePost, corePut, CoreApiError }
