@@ -1,6 +1,7 @@
 import { Client, GatewayIntentBits } from 'discord.js'
 import type { BotInstanceRow, RoleRow } from '@zakobot/database'
 import type { Agent } from '../llm/agent.js'
+import type { ConversationService } from '../llm/conversation-service.js'
 
 export class DiscordAdapter {
   readonly client: Client
@@ -9,6 +10,7 @@ export class DiscordAdapter {
     readonly instance: BotInstanceRow,
     readonly role: RoleRow,
     private agent: Agent,
+    private conversations: ConversationService,
   ) {
     this.client = new Client({
       intents: [
@@ -42,12 +44,47 @@ export class DiscordAdapter {
 
     if (!userText) return
 
+    const scope = {
+      platform: this.instance.platform,
+      scopeKey: `discord:${msg.channelId}`,
+      sourceType: 'discord_channel',
+      sourceId: msg.channelId,
+      metadata: {
+        channelId: msg.channelId,
+        guildId: msg.guildId ?? '',
+      },
+    }
+
     // PartialGroupDMChannel doesn't support sending — guard against it
     if (!('send' in msg.channel)) return
 
     try {
+      if (userText === '/new') {
+        const topic = this.conversations.startNewTopic(this.instance, scope)
+        await msg.reply(`已开启新话题：${topic.name}`)
+        return
+      }
+
+      const topic = this.conversations.getOrCreateActiveTopic(this.instance, scope)
+      this.conversations.appendMessage(this.instance, topic.id, scope, {
+        role: 'user',
+        content: userText,
+        platformMessageId: msg.id,
+        senderId: msg.author.id,
+        senderName: msg.author.username,
+        metadata: {
+          mentionCount: msg.mentions.users.size,
+        },
+      })
+
       await msg.channel.sendTyping()
-      const reply = await this.agent.respond(this.instance.id, msg.channelId, userText)
+      const reply = await this.agent.respond(topic.id)
+      this.conversations.appendMessage(this.instance, topic.id, scope, {
+        role: 'assistant',
+        content: reply,
+        senderId: this.client.user?.id ?? '',
+        senderName: this.client.user?.username ?? this.instance.name,
+      })
 
       // Discord has a 2000 char limit per message
       if (reply.length <= 2000) {

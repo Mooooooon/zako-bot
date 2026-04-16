@@ -128,6 +128,12 @@ const mainItems = computed<NavigationMenuItem[]>(() => [
     active: route.path.startsWith('/bots'),
   },
   {
+    label: '聊天',
+    icon: 'i-heroicons-chat-bubble-left-right-20-solid',
+    to: '/chat',
+    active: route.path.startsWith('/chat'),
+  },
+  {
     label: '插件',
     icon: 'i-heroicons-cube-20-solid',
     to: '/plugins',

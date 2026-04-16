@@ -18,6 +18,7 @@ export interface BotEditorInput {
 export interface BotProfile extends BotEditorInput {
   id: string
   roleName: string
+  roleAvatar: string
   createdAt: string
   updatedAt: string
 }
@@ -28,6 +29,7 @@ export interface BotListItem {
   platform: Platform
   roleId: string
   roleName: string
+  roleAvatar: string
   llmPlatformName: string
   llmModel: string
   discordUserId: string

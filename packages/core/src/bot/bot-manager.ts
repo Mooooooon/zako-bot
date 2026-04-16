@@ -1,14 +1,23 @@
-import type { DB, BotInstanceRow, RoleRow } from '@zakobot/database'
+import { randomUUID } from 'crypto'
+import type {
+  ConversationMessageRow,
+  ConversationTopicRow,
+  DB,
+  BotInstanceRow,
+  RoleRow,
+} from '@zakobot/database'
 import { getEnabledBots, getBotWithRole } from '@zakobot/database'
 import { DiscordAdapter } from './discord-adapter.js'
 import { Agent } from '../llm/agent.js'
-import { ConversationStore } from '../llm/conversation-store.js'
+import { ConversationService } from '../llm/conversation-service.js'
 
 export class BotManager {
   private adapters = new Map<string, DiscordAdapter>()
-  private store = new ConversationStore()
+  private conversations: ConversationService
 
-  constructor(private db: DB) {}
+  constructor(private db: DB) {
+    this.conversations = new ConversationService(db)
+  }
 
   async startAll() {
     const rows = getEnabledBots(this.db)
@@ -41,6 +50,88 @@ export class BotManager {
     await this.startInstance(row)
   }
 
+  listConversationTopics(instanceId: string): ConversationTopicRow[] {
+    this.requireBotRow(instanceId)
+    return this.conversations.listTopics(instanceId)
+  }
+
+  listConversationMessages(instanceId: string, topicId: string): ConversationMessageRow[] {
+    const row = this.requireBotRow(instanceId)
+    const topic = this.conversations.getTopic(topicId)
+
+    if (!topic || topic.botInstanceId !== row.instance.id) {
+      throw new Error(`Conversation topic "${topicId}" not found`)
+    }
+
+    return this.conversations.listTopicMessages(topicId)
+  }
+
+  startPanelConversation(instanceId: string): ConversationTopicRow {
+    const row = this.requireBotRow(instanceId)
+
+    return this.conversations.startNewTopic(row.instance, {
+      platform: row.instance.platform,
+      scopeKey: `panel:${randomUUID()}`,
+      sourceType: 'panel',
+      sourceId: 'panel',
+      metadata: {},
+    })
+  }
+
+  async sendPanelMessage(instanceId: string, content: string, topicId?: string) {
+    const row = this.requireBotRow(instanceId)
+    const resolvedContent = content.trim()
+
+    if (!resolvedContent) {
+      throw new Error('Message content is required')
+    }
+
+    let topic = topicId ? this.conversations.getTopic(topicId) : undefined
+    if (topic && topic.botInstanceId !== row.instance.id) {
+      throw new Error(`Conversation topic "${topicId}" not found`)
+    }
+
+    if (!topic) {
+      topic = this.startPanelConversation(instanceId)
+    }
+
+    const scope = {
+      platform: row.instance.platform,
+      scopeKey: topic.scopeKey,
+      sourceType: topic.sourceType,
+      sourceId: topic.sourceId,
+      metadata: this.parseJsonRecord(topic.metadata),
+    }
+
+    const userMessage = this.conversations.appendMessage(row.instance, topic.id, scope, {
+      role: 'user',
+      content: resolvedContent,
+      senderName: '控制台',
+      metadata: {
+        origin: 'panel',
+      },
+    })!
+
+    const agent = this.createAgent(row)
+    const reply = await agent.respond(topic.id)
+
+    const assistantMessage = this.conversations.appendMessage(row.instance, topic.id, scope, {
+      role: 'assistant',
+      content: reply,
+      senderId: row.instance.id,
+      senderName: row.instance.name,
+      metadata: {
+        origin: 'panel',
+      },
+    })!
+
+    return {
+      topic: this.conversations.getTopic(topic.id)!,
+      userMessage,
+      assistantMessage,
+    }
+  }
+
   private async startInstance(row: { instance: BotInstanceRow; role: RoleRow }) {
     if (row.instance.platform !== 'discord') {
       console.warn(`[BotManager] Platform "${row.instance.platform}" not yet supported, skipping.`)
@@ -55,13 +146,8 @@ export class BotManager {
       await this.stopOne(row.instance.id)
     }
 
-    const agent = new Agent(row.role, {
-      provider: row.instance.llmProvider as 'openai',
-      model: row.instance.llmModel,
-      apiKey: row.instance.llmApiKey,
-      baseUrl: row.instance.llmBaseUrl,
-    }, this.store)
-    const adapter = new DiscordAdapter(row.instance, row.role, agent)
+    const agent = this.createAgent(row)
+    const adapter = new DiscordAdapter(row.instance, row.role, agent, this.conversations)
 
     await adapter.start()
     this.adapters.set(row.instance.id, adapter)
@@ -96,6 +182,37 @@ export class BotManager {
         name: a.instance.name,
         platform: a.instance.platform,
       })),
+    }
+  }
+
+  private createAgent(row: { instance: BotInstanceRow; role: RoleRow }) {
+    return new Agent(row.role, {
+      provider: row.instance.llmProvider as 'openai',
+      model: row.instance.llmModel,
+      apiKey: row.instance.llmApiKey,
+      baseUrl: row.instance.llmBaseUrl,
+    }, this.conversations)
+  }
+
+  private requireBotRow(instanceId: string) {
+    const row = getBotWithRole(this.db, instanceId)
+    if (!row) {
+      throw new Error(`Bot instance "${instanceId}" not found`)
+    }
+
+    if (!row.instance.llmModel || !row.instance.llmApiKey || !row.instance.llmBaseUrl) {
+      throw new Error(`Bot "${row.instance.name}" is missing LLM configuration`)
+    }
+
+    return row
+  }
+
+  private parseJsonRecord(value: string): Record<string, unknown> {
+    try {
+      const parsed = JSON.parse(value) as Record<string, unknown>
+      return parsed && typeof parsed === 'object' ? parsed : {}
+    } catch {
+      return {}
     }
   }
 }

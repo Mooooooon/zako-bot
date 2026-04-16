@@ -20,8 +20,13 @@ import type {
   BotEditorInput,
   BotListItem,
   BotProfile,
+  ConversationMessage,
+  ConversationTopic,
+  CreateConversationTopicInput,
   RoleEditorInput,
   RoleProfile,
+  SendConversationMessageInput,
+  SendConversationMessageResult,
 } from '@zakobot/shared'
 
 export class ApiServer {
@@ -103,6 +108,7 @@ export class ApiServer {
       token: row.instance.token,
       roleId: row.instance.roleId,
       roleName: row.role.name,
+      roleAvatar: row.role.avatar,
       llmProvider: row.instance.llmProvider as 'openai',
       llmPlatformName: row.instance.llmPlatformName,
       llmModel: row.instance.llmModel,
@@ -123,6 +129,7 @@ export class ApiServer {
       platform: row.instance.platform,
       roleId: row.instance.roleId,
       roleName: row.role.name,
+      roleAvatar: row.role.avatar,
       llmPlatformName: row.instance.llmPlatformName,
       llmModel: row.instance.llmModel,
       discordUserId: row.instance.discordUserId,
@@ -130,6 +137,39 @@ export class ApiServer {
       enabled: row.instance.enabled,
       createdAt: row.instance.createdAt.toISOString(),
       updatedAt: row.instance.updatedAt.toISOString(),
+    }
+  }
+
+  private toConversationTopic(row: ReturnType<BotManager['listConversationTopics']>[number]): ConversationTopic {
+    return {
+      id: row.id,
+      botInstanceId: row.botInstanceId,
+      platform: row.platform,
+      scopeKey: row.scopeKey,
+      name: row.name,
+      status: row.status,
+      sourceType: row.sourceType,
+      sourceId: row.sourceId,
+      metadata: this.parseJsonRecord(row.metadata),
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    }
+  }
+
+  private toConversationMessage(row: ReturnType<BotManager['listConversationMessages']>[number]): ConversationMessage {
+    return {
+      id: row.id,
+      topicId: row.topicId,
+      botInstanceId: row.botInstanceId,
+      platform: row.platform,
+      role: row.role as 'user' | 'assistant',
+      content: row.content,
+      messageType: row.messageType,
+      platformMessageId: row.platformMessageId,
+      senderId: row.senderId,
+      senderName: row.senderName,
+      metadata: this.parseJsonRecord(row.metadata),
+      createdAt: row.createdAt.toISOString(),
     }
   }
 
@@ -192,8 +232,49 @@ export class ApiServer {
     }
   }
 
+  private parseCreateConversationTopicInput(body: Partial<CreateConversationTopicInput>) {
+    const botInstanceId = body.botInstanceId?.trim()
+
+    if (!botInstanceId) {
+      throw new Error('Bot instance ID is required')
+    }
+
+    return { botInstanceId }
+  }
+
+  private parseSendConversationMessageInput(body: Partial<SendConversationMessageInput>) {
+    const botInstanceId = body.botInstanceId?.trim()
+    const topicId = body.topicId?.trim()
+    const content = body.content?.trim()
+
+    if (!botInstanceId) {
+      throw new Error('Bot instance ID is required')
+    }
+
+    if (!content) {
+      throw new Error('Message content is required')
+    }
+
+    return {
+      botInstanceId,
+      topicId: topicId || undefined,
+      content,
+    }
+  }
+
+  private parseJsonRecord(value: string): Record<string, unknown> {
+    try {
+      const parsed = JSON.parse(value) as Record<string, unknown>
+      return parsed && typeof parsed === 'object' ? parsed : {}
+    }
+    catch {
+      return {}
+    }
+  }
+
   private async handle(req: http.IncomingMessage, res: http.ServerResponse) {
-    const { pathname } = new URL(req.url ?? '/', 'http://127.0.0.1')
+    const url = new URL(req.url ?? '/', 'http://127.0.0.1')
+    const { pathname, searchParams } = url
 
     if (pathname === '/status' && req.method === 'GET') {
       const { botsOnline, instances } = this.botManager.getStatus()
@@ -247,6 +328,59 @@ export class ApiServer {
         ok: true,
         data: listBotsWithRoles(this.db).map(row => this.toBotListItem(row)),
       })
+    }
+
+    if (pathname === '/conversations' && req.method === 'GET') {
+      const botInstanceId = searchParams.get('botInstanceId')?.trim()
+
+      if (!botInstanceId) {
+        return this.json(res, { ok: false, error: 'Bot instance ID is required' }, 400)
+      }
+
+      try {
+        const topics = this.botManager
+          .listConversationTopics(botInstanceId)
+          .map(topic => this.toConversationTopic(topic))
+
+        return this.json(res, { ok: true, data: topics })
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to load conversation topics'
+        const status = message.includes('not found') ? 404 : 400
+        return this.json(res, { ok: false, error: message }, status)
+      }
+    }
+
+    if (pathname === '/conversations' && req.method === 'POST') {
+      try {
+        const payload = this.parseCreateConversationTopicInput(await this.readJson<CreateConversationTopicInput>(req))
+        const topic = this.botManager.startPanelConversation(payload.botInstanceId)
+        return this.json(res, { ok: true, data: this.toConversationTopic(topic) }, 201)
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to create conversation topic'
+        const status = message.includes('not found') ? 404 : 400
+        return this.json(res, { ok: false, error: message }, status)
+      }
+    }
+
+    if (pathname === '/conversations/messages' && req.method === 'POST') {
+      try {
+        const payload = this.parseSendConversationMessageInput(await this.readJson<SendConversationMessageInput>(req))
+        const result = await this.botManager.sendPanelMessage(payload.botInstanceId, payload.content, payload.topicId)
+        const data: SendConversationMessageResult = {
+          topic: this.toConversationTopic(result.topic),
+          userMessage: this.toConversationMessage(result.userMessage),
+          assistantMessage: this.toConversationMessage(result.assistantMessage),
+        }
+
+        return this.json(res, { ok: true, data })
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to send conversation message'
+        const status = message.includes('not found') ? 404 : 400
+        return this.json(res, { ok: false, error: message }, status)
+      }
     }
 
     if (pathname === '/bots' && req.method === 'POST') {
@@ -418,6 +552,28 @@ export class ApiServer {
       catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to delete bot'
         return this.json(res, { ok: false, error: message }, 400)
+      }
+    }
+
+    const conversationMessagesMatch = pathname.match(/^\/conversations\/([^/]+)\/messages$/)
+    if (conversationMessagesMatch && req.method === 'GET') {
+      const botInstanceId = searchParams.get('botInstanceId')?.trim()
+
+      if (!botInstanceId) {
+        return this.json(res, { ok: false, error: 'Bot instance ID is required' }, 400)
+      }
+
+      try {
+        const messages = this.botManager
+          .listConversationMessages(botInstanceId, conversationMessagesMatch[1])
+          .map(message => this.toConversationMessage(message))
+
+        return this.json(res, { ok: true, data: messages })
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to load conversation messages'
+        const status = message.includes('not found') ? 404 : 400
+        return this.json(res, { ok: false, error: message }, status)
       }
     }
 

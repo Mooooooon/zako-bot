@@ -1,27 +1,26 @@
 import type { RoleRow } from '@zakobot/database'
 import type { LLMConfig, LLMTool } from '@zakobot/shared'
 import { LLMClient } from './client.js'
-import { ConversationStore } from './conversation-store.js'
+import { ConversationService } from './conversation-service.js'
 
 export class Agent {
   private client: LLMClient
-  private store: ConversationStore
   private tools: LLMTool[] = []
 
-  constructor(private role: RoleRow, llmConfig: LLMConfig, store: ConversationStore) {
+  constructor(
+    private role: RoleRow,
+    llmConfig: LLMConfig,
+    private conversations: ConversationService,
+  ) {
     this.client = new LLMClient(llmConfig)
-    this.store = store
   }
 
   registerTool(tool: LLMTool) {
     this.tools.push(tool)
   }
 
-  async respond(botInstanceId: string, channelId: string, userText: string): Promise<string> {
-    // Add user message to history
-    this.store.push(botInstanceId, channelId, { role: 'user', content: userText })
-
-    const history = this.store.get(botInstanceId, channelId)
+  async respond(topicId: string): Promise<string> {
+    const history = this.conversations.listTopicHistory(topicId)
     const messages = [
       { role: 'system' as const, content: this.role.systemPrompt },
       ...history,
@@ -32,14 +31,6 @@ export class Agent {
     const allowedTools = this.tools.filter((t) => enabledTools.includes(t.name))
 
     const reply = await this.client.chat(messages, allowedTools)
-
-    // Add assistant reply to history
-    this.store.push(botInstanceId, channelId, { role: 'assistant', content: reply })
-
     return reply
-  }
-
-  clearHistory(botInstanceId: string, channelId: string) {
-    this.store.clear(botInstanceId, channelId)
   }
 }
