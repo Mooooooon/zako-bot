@@ -1,113 +1,181 @@
 # ZakoBot
 
-ZakoBot 是一个基于 TypeScript 的模块化 Bot 框架，目标是把 Bot 运行时、LLM 能力、插件系统和 Web 管理面板拆成清晰的几个包，便于持续扩展。
+ZakoBot 是一个基于 TypeScript 的模块化 Bot 框架，当前提供：
 
-当前仓库已经搭好了 monorepo 基础设施，并实现了可运行的 `core + panel + database + shared + cli` 结构。
+- `zakobot` CLI
+- Discord Bot 运行时
+- 基于 OpenAI 兼容接口的模型调用
+- SQLite 数据库
+- Web 管理面板
 
-## 当前状态
+如果你是第一次使用，按下面的“快速开始”走就可以。
 
-目前可以确认的已实现部分：
+## 快速开始
 
-- `pnpm workspace` monorepo
-- `core` 进程入口
-- Discord Bot 适配器
-- 基于角色配置的 LLM Agent
-- 插件加载器与定时任务调度
-- `core` 内部 HTTP API
-- 基于 Nuxt 的管理面板
-- 面板首页状态展示
-- 模型平台配置页与模型列表拉取
-- SQLite + Drizzle ORM 数据层
-- CLI 启动入口
+### 1. 安装
 
-当前仍在继续完善的部分：
+任选一种方式：
 
-- 角色管理 CRUD
-- 机器人实例管理 CRUD
-- 插件配置管理
-- 更多平台适配器，例如 QQ
-- 更完整的插件生态
-
-## 架构说明
-
-当前架构是两个独立进程共享同一个数据库文件：
-
-```text
-packages/core   -> 机器人运行时、LLM、插件、内部 API
-packages/panel  -> Web 管理面板（页面 + Nitro 服务端接口）
-packages/database -> Drizzle schema / queries / migrations
-shared          -> 跨包共享类型
+```bash
+npm install -g zakobot
 ```
 
-`panel` 不直接操作 bot runtime，而是通过 `CORE_API_URL` 调用 `core` 暴露的内部接口。
+或直接临时运行：
 
-数据库当前使用 SQLite，`packages/database/src/client.ts` 中启用了 WAL 模式，以支持 `core` 和 `panel` 并发访问。
+```bash
+npx zakobot init
+npx zakobot start
+```
 
-## 技术栈
+如果你使用 pnpm：
 
-| 层 | 技术 |
-|---|---|
-| Monorepo | `pnpm workspace` |
-| 语言 | TypeScript |
-| 模块系统 | ESM |
-| Bot Runtime | Node.js + `discord.js` |
-| LLM | `openai` SDK（当前按 OpenAI 兼容接口接入） |
-| Plugin Scheduler | `node-cron` |
-| Panel | Nuxt 4 + Vue 3 + Nitro |
-| UI | `@nuxt/ui` + Tailwind CSS 4 |
-| Database | `drizzle-orm` + `drizzle-kit` + `better-sqlite3` |
-| CLI | `commander` |
+```bash
+pnpm dlx zakobot init
+pnpm dlx zakobot start
+```
 
-## 目录结构
+### 2. 初始化工作目录
+
+```bash
+zakobot init
+```
+
+默认会创建：
 
 ```text
-zako-bot/
-├─ package.json
-├─ pnpm-workspace.yaml
-├─ tsconfig.base.json
-├─ AGENTS.md
-├─ packages/
-│  ├─ cli/
-│  │  └─ src/index.ts
-│  ├─ core/
-│  │  └─ src/
-│  │     ├─ api/
-│  │     ├─ bot/
-│  │     ├─ llm/
-│  │     ├─ plugins/
-│  │     ├─ index.ts
-│  │     └─ seed.ts
-│  ├─ database/
-│  │  ├─ migrations/
-│  │  └─ src/
-│  │     ├─ client.ts
-│  │     ├─ schema/
-│  │     ├─ queries/
-│  │     └─ migrate.ts
-│  └─ panel/
-│     ├─ assets/
-│     ├─ components/
-│     ├─ composables/
-│     ├─ layouts/
-│     ├─ pages/
-│     ├─ server/
-│     ├─ app.vue
-│     └─ nuxt.config.ts
-└─ shared/
-   └─ src/
-      ├─ index.ts
-      └─ types/
+~/.zakobot
+```
+
+当前版本运行时默认会把数据库放在：
+
+```text
+~/.zakobot/data.db
+```
+
+### 3. 启动
+
+```bash
+zakobot start
+```
+
+启动后打开：
+
+- Panel: [http://127.0.0.1:6324](http://127.0.0.1:6324)
+- Core API: [http://127.0.0.1:6325](http://127.0.0.1:6325)
+
+首次打开面板时需要登录，默认密码是：
+
+```text
+123456
+```
+
+登录后如果仍在使用默认密码，面板会提醒你尽快修改。
+
+## 命令说明
+
+```bash
+zakobot init
+zakobot start
+zakobot core
+zakobot panel
+```
+
+- `zakobot init`：初始化工作目录
+- `zakobot start`：同时启动 `core` 和 `panel`
+- `zakobot core`：只启动 Bot 核心进程
+- `zakobot panel`：只启动管理面板
+
+## 运行要求
+
+- 建议使用当前 LTS 版本的 Node.js
+- 可以访问你要使用的模型服务
+- 如果使用 Discord，需要准备 Bot Token
+
+## 首次使用建议
+
+启动后，建议按这个顺序配置：
+
+1. 打开管理面板
+2. 先在模型设置里配置你的模型平台
+3. 再创建角色、Bot 实例或测试聊天功能
+4. 确认 Core 状态和插件状态正常
+
+当前项目的重点是先把核心运行链路跑通，所以界面和功能仍在持续完善中。
+
+## 配置
+
+当前版本主要通过环境变量控制运行参数。
+
+### 常用环境变量
+
+```bash
+ZAKOBOT_HOME=~/.zakobot
+CORE_API_PORT=6325
+PANEL_PORT=6324
+DATABASE_URL=/path/to/zakobot.db
+CORE_API_URL=http://127.0.0.1:6325
+```
+
+说明：
+
+- `ZAKOBOT_HOME`：工作目录
+- `CORE_API_PORT`：Core API 端口
+- `PANEL_PORT`：Panel 端口
+- `DATABASE_URL`：SQLite 数据库文件路径
+- `CORE_API_URL`：Panel 调用 Core 时使用的地址
+
+### Windows PowerShell 示例
+
+```powershell
+$env:CORE_API_PORT="7001"
+$env:PANEL_PORT="7000"
+zakobot start
+```
+
+### macOS / Linux 示例
+
+```bash
+CORE_API_PORT=7001 PANEL_PORT=7000 zakobot start
+```
+
+## 数据位置
+
+默认情况下，ZakoBot 会在用户目录下保存自己的运行数据。
+
+```text
+~/.zakobot/
+  data.db
+  .env
+```
+
+其中：
+
+- `data.db` 是 SQLite 数据库
+- `.env` 会在 `zakobot init` 时创建，当前更适合作为配置模板参考
+
+## 项目结构
+
+如果你只是使用发布包，这一节可以先跳过。
+
+```text
+packages/core      Bot 运行时、插件、内部 API
+packages/panel     Web 管理面板
+packages/database  SQLite + Drizzle 数据层
+packages/cli       zakobot 命令行入口
+shared             跨包共享类型
 ```
 
 ## 本地开发
 
-### 1. 安装依赖
+如果你要参与开发仓库源码：
+
+### 安装依赖
 
 ```bash
 pnpm install
 ```
 
-### 2. 启动开发环境
+### 启动开发环境
 
 ```bash
 pnpm dev
@@ -115,31 +183,22 @@ pnpm dev
 
 这会并行启动：
 
-- `@zakobot/shared` 的 watch build
-- `@zakobot/database` 的 watch build
-- `@zakobot/core`
-- `@zakobot/panel`
+- `shared` watch build
+- `database` watch build
+- `core`
+- `panel`
 
-默认地址：
-
-- Panel: [http://127.0.0.1:6324](http://127.0.0.1:6324)
-- Core API: [http://127.0.0.1:6325](http://127.0.0.1:6325)
-
-### 3. 单独启动某个包
+### 常用命令
 
 ```bash
 pnpm dev:deps
 pnpm dev:core
 pnpm dev:panel
-```
-
-### 4. 构建
-
-```bash
 pnpm build
+pnpm lint
 ```
 
-## 数据库命令
+### 数据库命令
 
 ```bash
 pnpm --filter @zakobot/database db:generate
@@ -147,81 +206,34 @@ pnpm --filter @zakobot/database db:migrate
 pnpm --filter @zakobot/database db:studio
 ```
 
-## 包职责
+## 当前实现说明
 
-### `packages/core`
+目前仓库中的已知实现包括：
 
-负责：
+- `core` 与 `panel` 是两个独立进程
+- 两者共享同一个 SQLite 数据库文件
+- `panel` 通过 `CORE_API_URL` 调用 `core`
+- 当前明确支持的平台是 Discord
+- 模型调用按 OpenAI 兼容接口接入
 
-- 从数据库读取启用中的 bot 实例
-- 为每个实例创建运行时适配器
-- 根据角色配置调用 LLM
-- 维护对话历史
-- 加载根目录 `plugins/` 下的插件
-- 提供 `/status`、`/plugins` 等内部 API
+## 排查思路
 
-当前已明确支持的平台是 Discord。虽然 schema 中已经预留了 `qq`，但 runtime 里还没有实际适配器实现。
+### 启动后面板打不开
 
-### `packages/panel`
+先确认 `zakobot start` 没有报错，再检查端口是否被占用：
 
-负责：
+- `6324` 用于 Panel
+- `6325` 用于 Core API
 
-- 提供 Web 管理界面
-- 通过 Nitro server routes 代理或调用 `core`
-- 展示运行状态和插件信息
-- 管理模型平台配置，并调用兼容 OpenAI 的 `/v1/models` 获取模型列表
+如果端口冲突，改用环境变量指定新端口后重新启动。
 
-### `packages/database`
+### Panel 能打开，但拿不到 Core 状态
 
-负责：
+通常是 `core` 没有成功启动，或者 `CORE_API_URL` 配置不对。
 
-- 建立 SQLite 连接
-- 定义 `roles`、`bot_instances`、`plugins` 表
-- 提供查询函数
-- 管理 Drizzle 迁移
+### 数据库位置不符合预期
 
-### `shared`
-
-负责：
-
-- 提供跨包共享的 TypeScript 类型
-- 约束 `core` 和 `panel` 之间的 API 数据结构
-- 定义插件接口
-
-### `packages/cli`
-
-负责：
-
-- 提供 `zakobot` CLI 入口
-- 启动 `core`
-- 启动 `panel`
-- 同时启动两者
-
-## 当前可见页面
-
-当前面板里比较明确的页面状态：
-
-- `/`：控制台首页，可查看运行时状态与插件列表
-- `/settings/models`：模型平台配置与模型列表拉取
-- `/roles`、`/bots`、`/plugins`：目前还是占位页
-
-## 开发时的阅读入口
-
-建议按下面顺序理解项目：
-
-1. `packages/cli/src/index.ts`
-2. `packages/core/src/index.ts`
-3. `packages/core/src/bot/bot-manager.ts`
-4. `packages/core/src/api/server.ts`
-5. `packages/panel/server/utils/core-client.ts`
-6. `packages/database/src/schema/*`
-7. `shared/src/types/*`
-
-## 注意
-
-- README 应以源码为准，历史规划描述可能已经落后于当前实现
-- 当前内部 API 使用的是 Node 原生 `http`，不是 Express
-- 当前仓库内只有 SQLite 实现，没有 PostgreSQL 驱动代码
+显式设置 `DATABASE_URL` 即可。
 
 ## License
 

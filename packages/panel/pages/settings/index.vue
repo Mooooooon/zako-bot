@@ -3,5 +3,5 @@
 </template>
 
 <script setup lang="ts">
-navigateTo('/settings/models', { redirectCode: 302 })
+navigateTo('/settings/password', { redirectCode: 302 })
 </script>

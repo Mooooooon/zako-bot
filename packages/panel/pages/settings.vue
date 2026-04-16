@@ -55,6 +55,13 @@ const settingItems = [
     to: '/settings/browse',
     match: '/settings/browse',
   },
+  {
+    label: '密码设置',
+    icon: 'i-heroicons-lock-closed-20-solid',
+    value: 'password',
+    to: '/settings/password',
+    match: '/settings/password',
+  },
 ] as const
 
 const activeTab = computed(() =>
