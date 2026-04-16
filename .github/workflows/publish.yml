@@ -39,6 +39,7 @@ jobs:
         run: pnpm -r --fail-if-no-match --filter @zakobot/shared --filter @zakobot/database --filter @zakobot/core --filter @zakobot/panel --filter ./packages/cli pack --dry-run
 
       - name: Publish packages
-        run: pnpm -r --fail-if-no-match --filter @zakobot/shared --filter @zakobot/database --filter @zakobot/core --filter @zakobot/panel --filter ./packages/cli publish --access public --no-git-checks --provenance --report-summary
+        run: pnpm -r --fail-if-no-match --filter @zakobot/shared --filter @zakobot/database --filter @zakobot/core --filter @zakobot/panel --filter ./packages/cli publish --access public --no-git-checks --report-summary
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: 'true'
