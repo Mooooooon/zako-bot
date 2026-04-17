@@ -305,7 +305,7 @@ async function handleSave() {
   }
   catch (error: any) {
     toast.add({
-      title: error?.data?.statusMessage ?? error?.message ?? '保存浏览设置失败',
+      title: error?.data?.message ?? error?.message ?? '保存浏览设置失败',
       color: 'error',
     })
   }

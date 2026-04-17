@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
   catch (error) {
     throw createError({
       statusCode: 400,
-      statusMessage: error instanceof Error ? error.message : 'Failed to send conversation message',
+      message: error instanceof Error ? error.message : 'Failed to send conversation message',
     })
   }
 })

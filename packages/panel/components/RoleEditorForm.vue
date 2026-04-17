@@ -299,7 +299,7 @@ async function uploadAvatar(file: File) {
     state.avatar = response.data.url
   }
   catch (error: any) {
-    avatarUploadError.value = error?.data?.statusMessage ?? error?.message ?? '头像上传失败'
+    avatarUploadError.value = error?.data?.message ?? error?.message ?? '头像上传失败'
   }
   finally {
     avatarUploadPending.value = false

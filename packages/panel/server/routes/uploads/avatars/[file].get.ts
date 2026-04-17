@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   if (!fileName) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Avatar file is required',
+      message: 'Avatar file is required',
     })
   }
 
@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
     if (error?.code === 'ENOENT') {
       throw createError({
         statusCode: 404,
-        statusMessage: 'Avatar not found',
+        message: 'Avatar not found',
       })
     }
 

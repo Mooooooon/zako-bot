@@ -305,7 +305,7 @@ async function handleSave() {
   }
   catch (err: any) {
     toast.add({
-      title: err?.data?.statusMessage ?? err?.message ?? '保存通用设置失败',
+      title: err?.data?.message ?? err?.message ?? '保存通用设置失败',
       color: 'error',
     })
   }

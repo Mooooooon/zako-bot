@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
   if (!file?.type || !(file.type in extensionsByType)) {
     throw createError({
       statusCode: 400,
-      statusMessage: '请上传 PNG、JPG 或 WEBP 图片',
+      message: '请上传 PNG、JPG 或 WEBP 图片',
     })
   }
 
@@ -27,14 +27,14 @@ export default defineEventHandler(async (event) => {
   if (!buffer.length) {
     throw createError({
       statusCode: 400,
-      statusMessage: '头像文件不能为空',
+      message: '头像文件不能为空',
     })
   }
 
   if (buffer.length > MAX_AVATAR_SIZE) {
     throw createError({
       statusCode: 400,
-      statusMessage: '头像文件不能超过 5MB',
+      message: '头像文件不能超过 5MB',
     })
   }
 

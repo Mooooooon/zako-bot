@@ -3,12 +3,12 @@ export default defineEventHandler(async (event) => {
 
   if (body.format === 'google') {
     if (!body.baseUrl || !body.apiKey)
-      throw createError({ statusCode: 400, statusMessage: 'baseUrl and apiKey are required' })
+      throw createError({ statusCode: 400, message: 'baseUrl and apiKey are required' })
     return fetchGoogleModels(body.baseUrl, body.apiKey)
   }
 
   if (!body.baseUrl || !body.apiKey)
-    throw createError({ statusCode: 400, statusMessage: 'baseUrl and apiKey are required' })
+    throw createError({ statusCode: 400, message: 'baseUrl and apiKey are required' })
   return fetchOpenAIModels(body.baseUrl, body.apiKey)
 })
 
@@ -18,7 +18,7 @@ async function fetchOpenAIModels(baseUrl: string, apiKey: string) {
     url = new URL('/v1/models', baseUrl)
   }
   catch {
-    throw createError({ statusCode: 400, statusMessage: 'Invalid baseUrl' })
+    throw createError({ statusCode: 400, message: 'Invalid baseUrl' })
   }
 
   try {
@@ -30,7 +30,7 @@ async function fetchOpenAIModels(baseUrl: string, apiKey: string) {
       const text = await res.text().catch(() => '')
       throw createError({
         statusCode: res.status,
-        statusMessage: `Provider returned ${res.status}: ${text.slice(0, 200)}`,
+        message: `Provider returned ${res.status}: ${text.slice(0, 200)}`,
       })
     }
 
@@ -43,7 +43,7 @@ async function fetchOpenAIModels(baseUrl: string, apiKey: string) {
   }
   catch (err: any) {
     if (err.statusCode) throw err
-    throw createError({ statusCode: 502, statusMessage: `Failed to fetch models: ${err.message}` })
+    throw createError({ statusCode: 502, message: `Failed to fetch models: ${err.message}` })
   }
 }
 
@@ -55,7 +55,7 @@ async function fetchGoogleModels(baseUrl: string, apiKey: string) {
     url.searchParams.set('pageSize', '100')
   }
   catch {
-    throw createError({ statusCode: 400, statusMessage: 'Invalid baseUrl' })
+    throw createError({ statusCode: 400, message: 'Invalid baseUrl' })
   }
 
   try {
@@ -65,7 +65,7 @@ async function fetchGoogleModels(baseUrl: string, apiKey: string) {
       const text = await res.text().catch(() => '')
       throw createError({
         statusCode: res.status,
-        statusMessage: `Google API returned ${res.status}: ${text.slice(0, 200)}`,
+        message: `Google API returned ${res.status}: ${text.slice(0, 200)}`,
       })
     }
 
@@ -79,6 +79,6 @@ async function fetchGoogleModels(baseUrl: string, apiKey: string) {
   }
   catch (err: any) {
     if (err.statusCode) throw err
-    throw createError({ statusCode: 502, statusMessage: `Failed to fetch Google models: ${err.message}` })
+    throw createError({ statusCode: 502, message: `Failed to fetch Google models: ${err.message}` })
   }
 }

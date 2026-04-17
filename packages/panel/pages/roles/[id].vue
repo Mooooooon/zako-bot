@@ -102,7 +102,7 @@ async function handleSubmit(payload: RoleEditorInput) {
   }
   catch (error: any) {
     toast.add({
-      title: error?.data?.statusMessage ?? error?.message ?? '保存角色失败',
+      title: error?.data?.message ?? error?.message ?? '保存角色失败',
       color: 'error',
     })
   }
@@ -139,7 +139,7 @@ async function handleDelete() {
   }
   catch (error: any) {
     toast.add({
-      title: error?.data?.statusMessage ?? error?.message ?? '删除角色失败',
+      title: error?.data?.message ?? error?.message ?? '删除角色失败',
       color: 'error',
     })
   }

@@ -18,7 +18,7 @@ export default defineEventHandler((event) => {
   if (!session.authenticated) {
     throw createError({
       statusCode: 401,
-      statusMessage: '请先登录',
+      message: '请先登录',
     })
   }
 })

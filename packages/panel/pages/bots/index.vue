@@ -79,7 +79,6 @@ type BotRow = {
   platform: string
   roleName: string
   modelLabel: string
-  scopeLabel: string
   enabled: boolean
 }
 
@@ -97,7 +96,6 @@ const botRows = computed<BotRow[]>(() => (data.value?.data ?? []).map(bot => ({
   platform: bot.platform === 'discord' ? 'Discord' : bot.platform,
   roleName: bot.roleName,
   modelLabel: `${bot.llmPlatformName}-${bot.llmModel}`,
-  scopeLabel: `${bot.discordUserId} / ${bot.discordGuildId}`,
   enabled: bot.enabled,
 })))
 
@@ -119,12 +117,6 @@ const columns: TableColumn<BotRow>[] = [
     header: '模型',
     cell: ({ row }) =>
       h('span', { class: 'font-mono text-xs text-[var(--text-secondary)] md:text-sm' }, row.original.modelLabel),
-  },
-  {
-    accessorKey: 'scopeLabel',
-    header: '用户 / 服务器',
-    cell: ({ row }) =>
-      h('span', { class: 'font-mono text-xs text-[var(--text-secondary)] md:text-sm' }, row.original.scopeLabel),
   },
   {
     accessorKey: 'enabled',
@@ -209,7 +201,7 @@ async function handleDelete() {
   }
   catch (error: any) {
     toast.add({
-      title: error?.data?.statusMessage ?? error?.message ?? '删除机器人失败',
+      title: error?.data?.message ?? error?.message ?? '删除机器人失败',
       color: 'error',
     })
   }

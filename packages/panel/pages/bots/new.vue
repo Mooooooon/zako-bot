@@ -65,7 +65,7 @@ async function handleSubmit(payload: BotEditorInput) {
   }
   catch (error: any) {
     toast.add({
-      title: error?.data?.statusMessage ?? error?.message ?? '创建机器人失败',
+      title: error?.data?.message ?? error?.message ?? '创建机器人失败',
       color: 'error',
     })
   }

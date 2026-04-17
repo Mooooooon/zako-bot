@@ -26,6 +26,14 @@ const BUILT_IN_PLATFORMS: Omit<ModelPlatform, 'apiKey' | 'enabled' | 'enabledMod
     builtin: true,
   },
   {
+    id: 'deepseek',
+    name: 'DeepSeek',
+    format: 'openai',
+    baseUrl: 'https://api.deepseek.com',
+    defaultBaseUrl: 'https://api.deepseek.com',
+    builtin: true,
+  },
+  {
     id: 'google',
     name: 'Google AI Studio',
     format: 'google',

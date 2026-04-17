@@ -4,7 +4,7 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
 
   if (!id) {
-    throw createError({ statusCode: 400, statusMessage: 'Role id is required' })
+    throw createError({ statusCode: 400, message: 'Role id is required' })
   }
 
   try {
@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   catch (error: any) {
     throw createError({
       statusCode: error?.statusCode ?? 400,
-      statusMessage: error?.message ?? 'Failed to delete role',
+      message: error?.message ?? 'Failed to delete role',
     })
   }
 })

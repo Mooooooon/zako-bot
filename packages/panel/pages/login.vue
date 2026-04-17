@@ -114,7 +114,7 @@ async function handleLogin(_event: FormSubmitEvent<typeof form>) {
     await navigateTo(redirect)
   }
   catch (error: any) {
-    errorMessage.value = error?.data?.statusMessage ?? error?.message ?? '登录失败'
+    errorMessage.value = error?.data?.message ?? error?.message ?? '登录失败'
   }
   finally {
     submitting.value = false

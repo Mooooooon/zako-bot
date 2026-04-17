@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
   if (!session.authenticated) {
     throw createError({
       statusCode: 401,
-      statusMessage: '请先登录',
+      message: '请先登录',
     })
   }
 
@@ -27,21 +27,21 @@ export default defineEventHandler(async (event) => {
   if (currentPassword.length === 0 || nextPassword.length === 0 || confirmPassword.length === 0) {
     throw createError({
       statusCode: 400,
-      statusMessage: '请完整填写当前密码和新密码',
+      message: '请完整填写当前密码和新密码',
     })
   }
 
   if (nextPassword.length < 6) {
     throw createError({
       statusCode: 400,
-      statusMessage: '新密码至少需要 6 位',
+      message: '新密码至少需要 6 位',
     })
   }
 
   if (nextPassword !== confirmPassword) {
     throw createError({
       statusCode: 400,
-      statusMessage: '两次输入的新密码不一致',
+      message: '两次输入的新密码不一致',
     })
   }
 
@@ -50,7 +50,7 @@ export default defineEventHandler(async (event) => {
   if (!result) {
     throw createError({
       statusCode: 401,
-      statusMessage: '当前密码不正确',
+      message: '当前密码不正确',
     })
   }
 

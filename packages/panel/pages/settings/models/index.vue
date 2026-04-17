@@ -48,6 +48,7 @@
                 />
                 <span class="truncate text-sm">{{ p.name }}</span>
                 <UBadge
+                  v-if="!p.builtin"
                   :label="getFormatLabel(p.format)"
                   color="neutral"
                   variant="subtle"
@@ -126,7 +127,7 @@
           <!-- OpenAI / Google fields -->
           <template v-else>
             <UFormField label="接口地址" name="baseUrl" :hint="selectedPlatform.format === 'google' ? '用于模型列表拉取，LLM 调用请设为 OpenAI 兼容端点' : undefined">
-              <UInput v-model="editBaseUrl" class="w-full" :placeholder="selectedPlatform.defaultBaseUrl || 'https://api.example.com/v1'" />
+              <UInput v-model="editBaseUrl" class="w-full" :placeholder="selectedPlatform.defaultBaseUrl || 'https://api.example.com/v1'" :readonly="selectedPlatform.builtin" />
             </UFormField>
 
             <UFormField label="接口密钥" name="apiKey">

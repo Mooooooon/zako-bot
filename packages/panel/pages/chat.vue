@@ -355,7 +355,7 @@ async function loadTopics(botInstanceId: string, preferredTopicId?: string) {
   }
   catch (error: any) {
     topics.value = []
-    topicsError.value = error?.data?.statusMessage ?? error?.message ?? '话题加载失败'
+    topicsError.value = error?.data?.message ?? error?.message ?? '话题加载失败'
   }
   finally {
     topicsPending.value = false
@@ -374,7 +374,7 @@ async function loadMessages(botInstanceId: string, topicId: string) {
   }
   catch (error: any) {
     messages.value = []
-    messagesError.value = error?.data?.statusMessage ?? error?.message ?? '聊天记录加载失败'
+    messagesError.value = error?.data?.message ?? error?.message ?? '聊天记录加载失败'
   }
   finally {
     messagesPending.value = false
@@ -402,7 +402,7 @@ async function handleCreateTopic() {
     toast.add({ title: `已创建话题「${response.data.name}」`, color: 'success' })
   }
   catch (error: any) {
-    sendError.value = error?.data?.statusMessage ?? error?.message ?? '新建话题失败'
+    sendError.value = error?.data?.message ?? error?.message ?? '新建话题失败'
   }
   finally {
     creatingTopic.value = false
@@ -434,7 +434,7 @@ async function handleSubmit(event: Event) {
     await loadMessages(selectedBotId.value, response.data.topic.id)
   }
   catch (error: any) {
-    sendError.value = error?.data?.statusMessage ?? error?.message ?? '发送消息失败'
+    sendError.value = error?.data?.message ?? error?.message ?? '发送消息失败'
   }
   finally {
     submitting.value = false

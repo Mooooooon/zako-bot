@@ -190,7 +190,7 @@ async function handleSave(_event: FormSubmitEvent<typeof form>) {
     })
   }
   catch (error: any) {
-    errorMessage.value = error?.data?.statusMessage ?? error?.message ?? '保存失败'
+    errorMessage.value = error?.data?.message ?? error?.message ?? '保存失败'
   }
   finally {
     saving.value = false

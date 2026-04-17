@@ -4,7 +4,7 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
 
   if (!id) {
-    throw createError({ statusCode: 400, statusMessage: 'Role id is required' })
+    throw createError({ statusCode: 400, message: 'Role id is required' })
   }
 
   const body = await readBody<RoleEditorInput>(event)
@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
   catch (error) {
     throw createError({
       statusCode: 400,
-      statusMessage: error instanceof Error ? error.message : 'Failed to update role',
+      message: error instanceof Error ? error.message : 'Failed to update role',
     })
   }
 })

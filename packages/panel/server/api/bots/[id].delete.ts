@@ -6,7 +6,7 @@ export default defineEventHandler(async (event) => {
   if (!id) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Bot id is required',
+      message: 'Bot id is required',
     })
   }
 
@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
   catch (error: any) {
     throw createError({
       statusCode: error?.statusCode ?? 400,
-      statusMessage: error?.message ?? 'Failed to delete bot',
+      message: error?.message ?? 'Failed to delete bot',
     })
   }
 })

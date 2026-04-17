@@ -36,7 +36,7 @@ async function handleSubmit(payload: RoleEditorInput) {
   }
   catch (error: any) {
     toast.add({
-      title: error?.data?.statusMessage ?? error?.message ?? '创建角色失败',
+      title: error?.data?.message ?? error?.message ?? '创建角色失败',
       color: 'error',
     })
   }

@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   if (password.length === 0) {
     throw createError({
       statusCode: 400,
-      statusMessage: '请输入密码',
+      message: '请输入密码',
     })
   }
 
@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
   if (!result) {
     throw createError({
       statusCode: 401,
-      statusMessage: '密码错误',
+      message: '密码错误',
     })
   }
 

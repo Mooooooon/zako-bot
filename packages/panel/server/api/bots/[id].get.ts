@@ -6,7 +6,7 @@ export default defineEventHandler(async (event) => {
   if (!id) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Bot id is required',
+      message: 'Bot id is required',
     })
   }
 
@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
   catch (error) {
     throw createError({
       statusCode: 404,
-      statusMessage: error instanceof Error ? error.message : 'Failed to fetch bot',
+      message: error instanceof Error ? error.message : 'Failed to fetch bot',
     })
   }
 })

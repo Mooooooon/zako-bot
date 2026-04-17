@@ -36,7 +36,7 @@ function assertAvatarFileName(fileName: string) {
   if (!avatarFilePattern.test(fileName)) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Invalid avatar file name',
+      message: 'Invalid avatar file name',
     })
   }
 

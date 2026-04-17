@@ -8,7 +8,7 @@ export default defineEventHandler(async () => {
   catch (error) {
     throw createError({
       statusCode: 503,
-      statusMessage: error instanceof Error ? error.message : 'Core is unreachable',
+      message: error instanceof Error ? error.message : 'Core is unreachable',
     })
   }
 })

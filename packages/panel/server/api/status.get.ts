@@ -6,6 +6,6 @@ export default defineEventHandler(async () => {
     return { ok: true, data: status }
   }
   catch {
-    throw createError({ statusCode: 503, statusMessage: 'Core is unreachable' })
+    throw createError({ statusCode: 503, message: 'Core is unreachable' })
   }
 })

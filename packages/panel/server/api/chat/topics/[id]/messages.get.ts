@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
   if (!topicId || !botInstanceId) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Bot instance ID and topic ID are required',
+      message: 'Bot instance ID and topic ID are required',
     })
   }
 
@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
   catch (error) {
     throw createError({
       statusCode: 400,
-      statusMessage: error instanceof Error ? error.message : 'Failed to load conversation messages',
+      message: error instanceof Error ? error.message : 'Failed to load conversation messages',
     })
   }
 })
