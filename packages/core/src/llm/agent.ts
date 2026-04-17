@@ -74,10 +74,12 @@ export class Agent {
     }).format(new Date())
 
     const result = [...history]
-    result[lastUserIndex] = {
-      ...result[lastUserIndex],
-      content: `${result[lastUserIndex].content}\n\n[发送时间：${timeStr} (${timezone})]`,
-    }
+    const msg = result[lastUserIndex]!
+    const timeNote = `\n\n[发送时间：${timeStr} (${timezone})]`
+    const newContent = Array.isArray(msg.content)
+      ? [...msg.content, { type: 'text' as const, text: timeNote.trim() }]
+      : `${msg.content}${timeNote}`
+    result[lastUserIndex] = { ...msg, content: newContent }
     return result
   }
 

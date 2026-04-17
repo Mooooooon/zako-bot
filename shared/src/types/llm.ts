@@ -20,7 +20,19 @@ export interface LLMTool {
   execute: (args: Record<string, unknown>) => Promise<string>
 }
 
+export interface ChatMessageTextPart {
+  type: 'text'
+  text: string
+}
+
+export interface ChatMessageImagePart {
+  type: 'image_url'
+  image_url: { url: string }
+}
+
+export type ChatMessageContentPart = ChatMessageTextPart | ChatMessageImagePart
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant'
-  content: string
+  content: string | ChatMessageContentPart[]
 }

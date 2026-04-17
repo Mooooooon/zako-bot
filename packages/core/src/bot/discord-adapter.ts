@@ -65,7 +65,11 @@ export class DiscordAdapter {
     if (requireMention && !isMentioned) return
 
     const userText = msg.content.replace(/<@!?\d+>/g, '').trim()
-    if (!userText) return
+    const imageUrls = [...msg.attachments.values()]
+      .filter(a => a.contentType?.startsWith('image/') ?? false)
+      .map(a => a.url)
+
+    if (!userText && imageUrls.length === 0) return
 
     if (!('send' in msg.channel)) return
 
@@ -88,7 +92,7 @@ export class DiscordAdapter {
           platformMessageId: msg.id,
           senderId: msg.author.id,
           senderName: msg.author.username,
-          metadata: { mentionCount: msg.mentions.users.size },
+          metadata: { mentionCount: msg.mentions.users.size, imageUrls },
         })
         await thread.sendTyping()
         const send = (payload: MsgPayload) => thread.send(payload).then((m) => { anySentToUser = true; return m })
@@ -110,7 +114,7 @@ export class DiscordAdapter {
         platformMessageId: msg.id,
         senderId: msg.author.id,
         senderName: msg.author.username,
-        metadata: { mentionCount: msg.mentions.users.size },
+        metadata: { mentionCount: msg.mentions.users.size, imageUrls },
       })
 
       await msg.channel.sendTyping()

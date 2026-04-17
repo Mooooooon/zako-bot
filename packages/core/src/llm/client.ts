@@ -71,7 +71,7 @@ export class LLMClient {
       return this.chatVertex(messages, tools, maxToolCallRounds)
     }
 
-    const requestMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [...messages]
+    const requestMessages: OpenAI.Chat.ChatCompletionMessageParam[] = messages.map(m => this.toOpenAIMessage(m))
     const toolDefinitions = this.buildToolDefinitions(tools)
 
     for (let i = 0; i < maxToolCallRounds; i += 1) {
@@ -131,7 +131,7 @@ export class LLMClient {
     }
 
     const { maxToolCallRounds = MAX_TOOL_CALL_ROUNDS, requestApproval } = options
-    const requestMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [...messages]
+    const requestMessages: OpenAI.Chat.ChatCompletionMessageParam[] = messages.map(m => this.toOpenAIMessage(m))
     const toolDefinitions = this.buildToolDefinitions(tools)
 
     for (let round = 0; round < maxToolCallRounds; round++) {
@@ -235,7 +235,7 @@ export class LLMClient {
   // ── Vertex AI (Google GenAI SDK) ──────────────────────────────────────────
 
   private async chatVertex(messages: ChatMessage[], tools: LLMTool[], maxRounds: number): Promise<string> {
-    const { systemInstruction, contents } = this.toGenAIContents(messages)
+    const { systemInstruction, contents } = await this.toGenAIContents(messages)
     const genAITools = this.buildGenAITools(tools)
 
     for (let round = 0; round < maxRounds; round++) {
@@ -292,7 +292,7 @@ export class LLMClient {
     options: { maxToolCallRounds?: number; requestApproval?: ToolApprovalCallback },
   ): AsyncGenerator<AgentEvent> {
     const { maxToolCallRounds = MAX_TOOL_CALL_ROUNDS, requestApproval } = options
-    const { systemInstruction, contents } = this.toGenAIContents(messages)
+    const { systemInstruction, contents } = await this.toGenAIContents(messages)
     const genAITools = this.buildGenAITools(tools)
 
     for (let round = 0; round < maxToolCallRounds; round++) {
@@ -381,23 +381,65 @@ export class LLMClient {
     yield { type: 'done', content: finalText }
   }
 
-  private toGenAIContents(messages: ChatMessage[]): { systemInstruction: string; contents: Content[] } {
+  private toOpenAIMessage(msg: ChatMessage): OpenAI.Chat.ChatCompletionMessageParam {
+    if (msg.role === 'system') {
+      const text = typeof msg.content === 'string' ? msg.content : msg.content.map(p => p.type === 'text' ? p.text : '').join('')
+      return { role: 'system', content: text }
+    }
+    if (msg.role === 'assistant') {
+      const text = typeof msg.content === 'string' ? msg.content : msg.content.map(p => p.type === 'text' ? p.text : '').join('')
+      return { role: 'assistant', content: text }
+    }
+    if (typeof msg.content === 'string') {
+      return { role: 'user', content: msg.content }
+    }
+    return {
+      role: 'user',
+      content: msg.content.map(p =>
+        p.type === 'text'
+          ? { type: 'text' as const, text: p.text }
+          : { type: 'image_url' as const, image_url: { url: p.image_url.url } },
+      ),
+    }
+  }
+
+  private async toGenAIContents(messages: ChatMessage[]): Promise<{ systemInstruction: string; contents: Content[] }> {
     const systemParts: string[] = []
     const contents: Content[] = []
 
     for (const msg of messages) {
       if (msg.role === 'system') {
-        systemParts.push(msg.content)
+        const text = typeof msg.content === 'string' ? msg.content : msg.content.map(p => p.type === 'text' ? p.text : '').join('')
+        systemParts.push(text)
       }
       else {
+        let parts: Part[]
+        if (typeof msg.content === 'string') {
+          parts = [{ text: msg.content }]
+        }
+        else {
+          parts = await Promise.all(msg.content.map(async (p): Promise<Part> => {
+            if (p.type === 'text') return { text: p.text }
+            const { data, mimeType } = await this.fetchImageAsInlineData(p.image_url.url)
+            return { inlineData: { data, mimeType } }
+          }))
+        }
         contents.push({
           role: msg.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: msg.content }],
+          parts,
         })
       }
     }
 
     return { systemInstruction: systemParts.join('\n\n'), contents }
+  }
+
+  private async fetchImageAsInlineData(url: string): Promise<{ data: string; mimeType: string }> {
+    const response = await fetch(url)
+    const buffer = await response.arrayBuffer()
+    const data = Buffer.from(buffer).toString('base64')
+    const mimeType = response.headers.get('content-type')?.split(';')[0]?.trim() ?? 'image/jpeg'
+    return { data, mimeType }
   }
 
   private buildGenAITools(tools: LLMTool[]): GenAITool[] {

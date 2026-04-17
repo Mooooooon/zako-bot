@@ -116,12 +116,19 @@
                   v-for="(part, index) in message.parts"
                   :key="`${message.id}-${index}`"
                 >
-                  <p
-                    v-if="message.role === 'user'"
-                    class="whitespace-pre-wrap break-words text-sm leading-6 text-[var(--text-primary)]"
-                  >
-                    {{ part.text }}
-                  </p>
+                  <template v-if="part.type === 'image'">
+                    <img
+                      :src="part.url"
+                      class="max-w-[320px] rounded-md border border-[var(--card-border)]"
+                      loading="lazy"
+                      alt="图片"
+                    >
+                  </template>
+                  <template v-else-if="message.role === 'user'">
+                    <p class="whitespace-pre-wrap break-words text-sm leading-6 text-[var(--text-primary)]">
+                      {{ part.text }}
+                    </p>
+                  </template>
                   <Comark
                     v-else
                     class="chat-markdown text-sm leading-6 text-[var(--text-primary)]"
@@ -195,10 +202,17 @@ type UiTextPart = {
   text: string
 }
 
+type UiImagePart = {
+  type: 'image'
+  url: string
+}
+
+type UiPart = UiTextPart | UiImagePart
+
 type UiMessage = {
   id: string
   role: 'user' | 'assistant'
-  parts: UiTextPart[]
+  parts: UiPart[]
   createdAt?: Date
 }
 
@@ -291,12 +305,13 @@ const comarkPlugins = [
 ]
 
 const uiMessages = computed<UiMessage[]>(() =>
-  messages.value.map(message => ({
-    id: message.id,
-    role: message.role,
-    parts: [{ type: 'text', text: message.content }],
-    createdAt: new Date(message.createdAt),
-  })),
+  messages.value.map((message) => {
+    const parts: UiPart[] = []
+    if (message.content) parts.push({ type: 'text', text: message.content })
+    const imageUrls = Array.isArray(message.metadata?.imageUrls) ? message.metadata.imageUrls as string[] : []
+    for (const url of imageUrls) parts.push({ type: 'image', url })
+    return { id: message.id, role: message.role, parts, createdAt: new Date(message.createdAt) }
+  }),
 )
 
 function isPartStreaming(message: UiMessage) {
@@ -346,7 +361,7 @@ async function loadTopics(botInstanceId: string, preferredTopicId?: string) {
       query: { botInstanceId },
     })
 
-    topics.value = response.data
+    topics.value = response.data.slice(0, 20)
 
     const nextTopicId = preferredTopicId
       ?? (topics.value.some(topic => topic.id === selectedTopicId.value) ? selectedTopicId.value : topics.value[0]?.id ?? '')

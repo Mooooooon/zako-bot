@@ -10,7 +10,7 @@ import {
   type BotInstanceRow,
   type DB,
 } from '@zakobot/database'
-import type { ChatMessage } from '@zakobot/shared'
+import type { ChatMessage, ChatMessageContentPart } from '@zakobot/shared'
 
 const MAX_HISTORY = 40
 
@@ -75,10 +75,25 @@ export class ConversationService {
   listTopicHistory(topicId: string): ChatMessage[] {
     return listConversationMessages(this.db, topicId, MAX_HISTORY)
       .filter(message => message.role === 'user' || message.role === 'assistant')
-      .map(message => ({
-        role: message.role as 'user' | 'assistant',
-        content: message.content,
-      }))
+      .map((message): ChatMessage => {
+        if (message.role === 'user') {
+          let imageUrls: string[] = []
+          try {
+            const meta = JSON.parse(message.metadata || '{}') as Record<string, unknown>
+            if (Array.isArray(meta.imageUrls)) imageUrls = meta.imageUrls as string[]
+          }
+          catch { /* ignore */ }
+
+          if (imageUrls.length > 0) {
+            const parts: ChatMessageContentPart[] = []
+            if (message.content) parts.push({ type: 'text', text: message.content })
+            for (const url of imageUrls) parts.push({ type: 'image_url', image_url: { url } })
+            return { role: 'user', content: parts }
+          }
+        }
+
+        return { role: message.role as 'user' | 'assistant', content: message.content }
+      })
   }
 
   listTopicMessages(topicId: string): ConversationMessageRow[] {
