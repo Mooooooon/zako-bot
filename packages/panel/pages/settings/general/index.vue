@@ -154,6 +154,22 @@
                   <USwitch v-model="form.threadMode" :disabled="saving" />
                 </div>
               </UFormField>
+
+              <UFormField
+                label="每频道最大子区数"
+                name="maxThreadsPerChannel"
+                description="子区模式下，bot 在每个频道自动创建的子区上限。超出时将按时间自动删除最早创建的子区。设为 0 则禁用此限制。范围：0 – 100。"
+              >
+                <UInput
+                  v-model.number="form.maxThreadsPerChannel"
+                  class="w-full"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  :disabled="saving || !form.threadMode"
+                />
+              </UFormField>
             </section>
 
             <section v-else-if="activeSection === 'time'" class="space-y-4">
@@ -252,6 +268,7 @@ const form = reactive<GeneralSettings>({
   maxToolCallRounds: 8,
   requireMention: true,
   threadMode: false,
+  maxThreadsPerChannel: 0,
   sendTime: false,
   timezone: 'UTC',
   toolApprovalMode: 'all',
@@ -266,6 +283,7 @@ watch(
     form.maxToolCallRounds = settings.maxToolCallRounds
     form.requireMention = settings.requireMention
     form.threadMode = settings.threadMode
+    form.maxThreadsPerChannel = settings.maxThreadsPerChannel
     form.sendTime = settings.sendTime
     form.timezone = settings.timezone
     form.toolApprovalMode = settings.toolApprovalMode
@@ -292,6 +310,7 @@ async function handleSave() {
         maxToolCallRounds: Number(form.maxToolCallRounds),
         requireMention: form.requireMention,
         threadMode: form.threadMode,
+        maxThreadsPerChannel: Number(form.maxThreadsPerChannel),
         sendTime: form.sendTime,
         timezone: form.timezone,
         toolApprovalMode: form.toolApprovalMode,

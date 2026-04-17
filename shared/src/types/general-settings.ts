@@ -5,6 +5,7 @@ export interface GeneralSettings {
   maxToolCallRounds: number
   requireMention: boolean
   threadMode: boolean
+  maxThreadsPerChannel: number
   sendTime: boolean
   timezone: string
   toolApprovalMode: ToolApprovalMode

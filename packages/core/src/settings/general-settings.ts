@@ -34,6 +34,7 @@ function normalizeGeneralSettings(value: Record<string, unknown>): GeneralSettin
     maxToolCallRounds: normalizeMaxToolCallRounds(value.maxToolCallRounds),
     requireMention: value.requireMention === false || value.requireMention === 'false' ? false : true,
     threadMode: value.threadMode === true || value.threadMode === 'true' ? true : false,
+    maxThreadsPerChannel: normalizeMaxThreadsPerChannel(value.maxThreadsPerChannel),
     sendTime: value.sendTime === true || value.sendTime === 'true' ? true : false,
     timezone: typeof value.timezone === 'string' && value.timezone.trim() ? value.timezone.trim() : 'UTC',
     toolApprovalMode: normalizeToolApprovalMode(value.toolApprovalMode),
@@ -49,6 +50,12 @@ function normalizeToolApprovalMode(value: unknown): ToolApprovalMode {
 function normalizeToolProcessMode(value: unknown): ToolProcessMode {
   if (value === 'none' || value === 'tools_only' || value === 'full') return value
   return 'full'
+}
+
+function normalizeMaxThreadsPerChannel(value: unknown): number {
+  const num = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(num) || num < 0) return 0
+  return Math.min(Math.trunc(num), 100)
 }
 
 function normalizeMaxToolCallRounds(value: unknown): number {

@@ -83,7 +83,12 @@ export class DiscordAdapter {
       }
 
       if (threadMode && !msg.channel.isThread() && msg.inGuild()) {
-        const thread = await msg.startThread({ name: userText.slice(0, 100) })
+        const threadName = (userText.replace(/<a?:\w+:\d+>/g, '').trim() || userText).slice(0, 100)
+        const thread = await msg.startThread({ name: threadName })
+        const { maxThreadsPerChannel } = this.getGeneralSettings()
+        if (maxThreadsPerChannel > 0) {
+          await this.pruneOldThreads(msg.channel, maxThreadsPerChannel)
+        }
         const scope = this.buildChannelScope(thread.id, msg.guildId)
         const topic = this.conversations.getOrCreateActiveTopic(this.instance, scope)
         this.conversations.appendMessage(this.instance, topic.id, scope, {
@@ -341,6 +346,24 @@ export class DiscordAdapter {
     }
 
     console.log(`[Discord] Registered global /${NEW_TOPIC_COMMAND.name}`)
+  }
+
+  private async pruneOldThreads(channel: Message['channel'], maxCount: number) {
+    if (!this.client.user || !('threads' in channel)) return
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { threads } = await (channel as any).threads.fetchActive() as { threads: import('discord.js').Collection<string, import('discord.js').ThreadChannel> }
+      const botId = this.client.user.id
+      const botThreads = [...threads.values()]
+        .filter(t => t.ownerId === botId)
+        .sort((a, b) => (a.createdTimestamp ?? 0) - (b.createdTimestamp ?? 0))
+      const excess = botThreads.length - maxCount
+      if (excess <= 0) return
+      await Promise.all(botThreads.slice(0, excess).map(t => t.delete().catch(() => {})))
+    }
+    catch {
+      // 忽略权限不足等错误
+    }
   }
 
   private startNewTopic(scope: ConversationScope) {

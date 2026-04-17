@@ -78,3 +78,12 @@ CORE_API_URL       Panel → Core URL (default: http://127.0.0.1:6325)
 ### TypeScript
 
 All packages use `tsconfig.base.json`: `target: ES2022`, `module: NodeNext`, strict mode, ESM. Packages compile with `tsc`; core dev uses `tsx watch`.
+
+## Checklists
+
+### 新增 `GeneralSettings` 字段时必须同步修改以下所有位置
+
+1. `shared/src/types/general-settings.ts` — 接口声明
+2. `packages/core/src/settings/general-settings.ts` — `normalizeGeneralSettings` 归一化逻辑
+3. `packages/core/src/api/server.ts` — `parseGeneralSettingsInput` 解析逻辑（**最容易遗漏**）
+4. `packages/panel/pages/settings/general/index.vue` — `form` 初始值、`watch` 同步、保存时 `body` 字段、UI 控件

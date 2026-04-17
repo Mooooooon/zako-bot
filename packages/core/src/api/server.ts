@@ -343,10 +343,17 @@ export class ApiServer {
     const toolProcessMode = body.toolProcessMode === 'none' || body.toolProcessMode === 'tools_only' || body.toolProcessMode === 'full'
       ? body.toolProcessMode
       : 'full'
+    const maxThreadsRaw = typeof body.maxThreadsPerChannel === 'number'
+      ? body.maxThreadsPerChannel
+      : Number(body.maxThreadsPerChannel)
+    const maxThreadsPerChannel = Number.isFinite(maxThreadsRaw) && maxThreadsRaw >= 0
+      ? Math.min(Math.trunc(maxThreadsRaw), 100)
+      : 0
     return {
       maxToolCallRounds,
       requireMention: body.requireMention === false ? false : true,
       threadMode: body.threadMode === true ? true : false,
+      maxThreadsPerChannel,
       sendTime: body.sendTime === true ? true : false,
       timezone: typeof body.timezone === 'string' && body.timezone.trim() ? body.timezone.trim() : 'UTC',
       toolApprovalMode,
