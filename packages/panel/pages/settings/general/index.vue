@@ -82,6 +82,16 @@
                   <USwitch v-model="form.requireMention" :disabled="saving" />
                 </div>
               </UFormField>
+
+              <UFormField
+                label="子区模式"
+                name="threadMode"
+                description="开启后机器人将为每条频道消息自动创建子区并在其中回复，用户的消息将作为子区标题。"
+              >
+                <div class="flex h-10 items-center">
+                  <USwitch v-model="form.threadMode" :disabled="saving" />
+                </div>
+              </UFormField>
             </section>
 
             <div class="flex justify-end">
@@ -136,6 +146,7 @@ const activeSectionMeta = computed(() =>
 const form = reactive<GeneralSettings>({
   maxToolCallRounds: 8,
   requireMention: true,
+  threadMode: false,
 })
 const saving = ref(false)
 
@@ -145,6 +156,7 @@ watch(
     if (!settings) return
     form.maxToolCallRounds = settings.maxToolCallRounds
     form.requireMention = settings.requireMention
+    form.threadMode = settings.threadMode
   },
   { immediate: true },
 )
@@ -166,6 +178,7 @@ async function handleSave() {
       body: {
         maxToolCallRounds: Number(form.maxToolCallRounds),
         requireMention: form.requireMention,
+        threadMode: form.threadMode,
       },
     })
 

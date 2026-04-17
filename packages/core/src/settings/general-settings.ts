@@ -33,6 +33,7 @@ function normalizeGeneralSettings(value: Record<string, unknown>): GeneralSettin
   return {
     maxToolCallRounds: normalizeMaxToolCallRounds(value.maxToolCallRounds),
     requireMention: value.requireMention === false || value.requireMention === 'false' ? false : true,
+    threadMode: value.threadMode === true || value.threadMode === 'true' ? true : false,
   }
 }
 

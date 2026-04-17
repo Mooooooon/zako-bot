@@ -340,6 +340,7 @@ export class ApiServer {
     return {
       maxToolCallRounds,
       requireMention: body.requireMention === false ? false : true,
+      threadMode: body.threadMode === true ? true : false,
     }
   }
 

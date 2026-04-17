@@ -45,7 +45,7 @@ export class DiscordAdapter {
     if (this.instance.discordGuildId && msg.guildId !== this.instance.discordGuildId) return
 
     const isMentioned = this.client.user && msg.mentions.has(this.client.user)
-    const { requireMention } = this.getGeneralSettings()
+    const { requireMention, threadMode } = this.getGeneralSettings()
 
     if (requireMention && !isMentioned) return
 
@@ -56,18 +56,48 @@ export class DiscordAdapter {
 
     if (!userText) return
 
-    const scope = this.buildChannelScope(msg.channelId, msg.guildId)
-
     // PartialGroupDMChannel doesn't support sending — guard against it
     if (!('send' in msg.channel)) return
 
     try {
       if (userText === '/new') {
-        const topic = this.startNewTopic(scope)
+        const topic = this.startNewTopic(this.buildChannelScope(msg.channelId, msg.guildId))
         await msg.reply(`已开启新话题：${topic.name}`)
         return
       }
 
+      // Thread mode: create a new thread per message in non-thread guild channels
+      if (threadMode && !msg.channel.isThread() && msg.inGuild()) {
+        const thread = await msg.startThread({ name: userText.slice(0, 100) })
+        const scope = this.buildChannelScope(thread.id, msg.guildId)
+        const topic = this.conversations.getOrCreateActiveTopic(this.instance, scope)
+        this.conversations.appendMessage(this.instance, topic.id, scope, {
+          role: 'user',
+          content: userText,
+          platformMessageId: msg.id,
+          senderId: msg.author.id,
+          senderName: msg.author.username,
+          metadata: { mentionCount: msg.mentions.users.size },
+        })
+        await thread.sendTyping()
+        const reply = await this.agent.respond(topic.id)
+        this.conversations.appendMessage(this.instance, topic.id, scope, {
+          role: 'assistant',
+          content: reply,
+          senderId: this.client.user?.id ?? '',
+          senderName: this.client.user?.username ?? this.instance.name,
+        })
+        if (reply.length <= 2000) {
+          await thread.send(reply)
+        } else {
+          for (let i = 0; i < reply.length; i += 2000) {
+            await thread.send(reply.slice(i, i + 2000))
+          }
+        }
+        return
+      }
+
+      const scope = this.buildChannelScope(msg.channelId, msg.guildId)
       const topic = this.conversations.getOrCreateActiveTopic(this.instance, scope)
       this.conversations.appendMessage(this.instance, topic.id, scope, {
         role: 'user',
