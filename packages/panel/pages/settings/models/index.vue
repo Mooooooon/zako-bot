@@ -40,6 +40,12 @@
               @click="selectedId = p.id"
             >
               <span class="flex min-w-0 flex-1 items-center gap-2">
+                <USwitch
+                  :model-value="p.enabled"
+                  size="xs"
+                  @update:model-value="togglePlatformEnabled(p.id); $event.stopPropagation()"
+                  @click.stop
+                />
                 <span class="truncate text-sm">{{ p.name }}</span>
                 <UBadge
                   :label="getFormatLabel(p.format)"
@@ -50,6 +56,7 @@
 
               <template #trailing>
                 <UButton
+                  v-if="!p.builtin"
                   icon="i-heroicons-trash-20-solid"
                   size="xs"
                   variant="ghost"
@@ -75,44 +82,75 @@
     <div class="min-w-0 flex-1 overflow-y-auto">
       <UCard v-if="selectedPlatform" variant="subtle">
         <template #header>
-          <div class="flex items-center gap-3">
-            <h3 class="m-0 text-xl font-bold text-[var(--text-primary)]">
-              {{ selectedPlatform.name }}
-            </h3>
-            <UBadge
-              :label="getFormatLabel(selectedPlatform.format)"
-              color="neutral"
-              variant="subtle"
-            />
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <h3 class="m-0 text-xl font-bold text-[var(--text-primary)]">
+                {{ selectedPlatform.name }}
+              </h3>
+              <UBadge :label="getFormatLabel(selectedPlatform.format)" color="neutral" variant="subtle" />
+              <span v-if="selectedPlatform.defaultBaseUrl" class="text-xs font-mono text-[var(--text-secondary)]">{{ selectedPlatform.defaultBaseUrl }}</span>
+            </div>
+            <USwitch :model-value="selectedPlatform.enabled" @update:model-value="togglePlatformEnabled(selectedPlatform.id)" />
           </div>
         </template>
 
         <div class="flex max-w-xl flex-col gap-4">
-          <UFormField label="接口地址" name="baseUrl">
-            <UInput v-model="editBaseUrl" class="w-full" placeholder="https://api.example.com/v1" />
-          </UFormField>
-
-          <UFormField label="接口密钥" name="apiKey">
-            <UInput v-model="editApiKey" :type="showApiKey ? 'text' : 'password'" placeholder="sk-...">
-              <template #trailing>
+          <!-- Vertex AI fields -->
+          <template v-if="selectedPlatform.format === 'vertex'">
+            <UFormField label="服务账号 JSON" name="credentials">
+              <div class="flex items-center gap-3">
                 <UButton
-                  :icon="showApiKey ? 'i-heroicons-eye-slash-20-solid' : 'i-heroicons-eye-20-solid'"
-                  size="xs"
-                  variant="ghost"
+                  label="上传 JSON 文件"
+                  icon="i-heroicons-arrow-up-tray-20-solid"
                   color="neutral"
-                  class="mr-1"
-                  :aria-label="showApiKey ? '隐藏接口密钥' : '显示接口密钥'"
-                  @click="showApiKey = !showApiKey"
+                  variant="outline"
+                  @click="fileInputRef?.click()"
                 />
-              </template>
-            </UInput>
-          </UFormField>
+                <span v-if="parsedVertexCreds" class="text-sm text-[var(--text-secondary)]">
+                  项目：<span class="font-mono font-medium text-[var(--text-primary)]">{{ parsedVertexCreds.project_id }}</span>
+                </span>
+                <span v-else class="text-sm text-[var(--text-secondary)]">未加载凭证</span>
+                <input ref="fileInputRef" type="file" accept=".json" class="hidden" @change="handleCredentialFileUpload">
+              </div>
+            </UFormField>
+
+            <UFormField label="区域" name="region" hint="留空或填 global 表示全球端点，也可填写具体区域如 us-central1">
+              <UInput v-model="editRegion" class="w-full" placeholder="global" />
+            </UFormField>
+
+            <UFormField v-if="parsedVertexCreds" label="推理端点（只读）" name="vertexEndpoint">
+              <UInput :model-value="computedVertexEndpoint" readonly class="w-full font-mono text-xs" />
+            </UFormField>
+          </template>
+
+          <!-- OpenAI / Google fields -->
+          <template v-else>
+            <UFormField label="接口地址" name="baseUrl" :hint="selectedPlatform.format === 'google' ? '用于模型列表拉取，LLM 调用请设为 OpenAI 兼容端点' : undefined">
+              <UInput v-model="editBaseUrl" class="w-full" :placeholder="selectedPlatform.defaultBaseUrl || 'https://api.example.com/v1'" />
+            </UFormField>
+
+            <UFormField label="接口密钥" name="apiKey">
+              <UInput v-model="editApiKey" :type="showApiKey ? 'text' : 'password'" placeholder="输入 API Key">
+                <template #trailing>
+                  <UButton
+                    :icon="showApiKey ? 'i-heroicons-eye-slash-20-solid' : 'i-heroicons-eye-20-solid'"
+                    size="xs"
+                    variant="ghost"
+                    color="neutral"
+                    class="mr-1"
+                    @click="showApiKey = !showApiKey"
+                  />
+                </template>
+              </UInput>
+            </UFormField>
+          </template>
 
           <div class="flex flex-wrap items-center gap-2">
             <UButton
+              v-if="selectedPlatform.format !== 'vertex'"
               label="拉取模型列表"
               :loading="fetchingModels"
-              :disabled="!editBaseUrl || !editApiKey"
+              :disabled="!canFetchModels"
               @click="handleFetchModels"
             />
             <UButton
@@ -132,38 +170,84 @@
             :description="fetchError"
           />
 
-          <div v-if="selectedPlatform.models.length" class="flex flex-col gap-3">
+          <div v-if="selectedPlatform.enabledModels.length" class="flex flex-col gap-2">
             <div class="flex items-center gap-2">
-              <h4 class="m-0 text-sm font-semibold text-[var(--text-primary)]">
-                可用模型
-              </h4>
-              <UBadge
-                :label="String(selectedPlatform.models.length)"
-                color="neutral"
-                variant="subtle"
-                size="lg"
-              />
+              <h4 class="m-0 text-sm font-semibold text-[var(--text-primary)]">已启用模型</h4>
+              <UBadge :label="String(selectedPlatform.enabledModels.length)" color="primary" variant="subtle" size="lg" />
             </div>
+            <div class="flex flex-wrap gap-1.5">
+              <div v-for="m in selectedPlatform.enabledModels" :key="m" class="group inline-flex items-center">
+                <UBadge
+                  :label="m"
+                  color="primary"
+                  variant="outline"
+                  size="xl"
+                  class="cursor-pointer font-mono"
+                  title="点击禁用"
+                  @click="disableModel(selectedPlatform.id, m)"
+                />
+                <UButton
+                  icon="i-heroicons-x-mark-20-solid"
+                  size="xs"
+                  variant="ghost"
+                  color="error"
+                  class="ml-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+                  @click="removeModel(selectedPlatform.id, m)"
+                />
+              </div>
+            </div>
+          </div>
 
-            <div class="flex flex-wrap gap-2">
-              <UBadge
-                v-for="m in selectedPlatform.models"
-                :key="m"
-                :label="m"
-                color="neutral"
-                variant="outline"
-                size="xl"
-                class="font-mono"
-              />
+          <div v-if="selectedPlatform.disabledModels.length" class="flex flex-col gap-2">
+            <div class="flex items-center gap-2">
+              <h4 class="m-0 text-sm font-semibold text-[var(--text-secondary)]">已禁用模型</h4>
+              <UBadge :label="String(selectedPlatform.disabledModels.length)" color="neutral" variant="subtle" size="lg" />
+            </div>
+            <div class="flex flex-wrap gap-1.5">
+              <div v-for="m in selectedPlatform.disabledModels" :key="m" class="group inline-flex items-center">
+                <UBadge
+                  :label="m"
+                  color="neutral"
+                  variant="subtle"
+                  size="xl"
+                  class="cursor-pointer font-mono"
+                  title="点击启用"
+                  @click="enableModel(selectedPlatform.id, m)"
+                />
+                <UButton
+                  icon="i-heroicons-x-mark-20-solid"
+                  size="xs"
+                  variant="ghost"
+                  color="error"
+                  class="ml-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+                  @click="removeModel(selectedPlatform.id, m)"
+                />
+              </div>
             </div>
           </div>
 
           <UEmpty
-            v-else
+            v-if="!selectedPlatform.enabledModels.length && !selectedPlatform.disabledModels.length"
             icon="i-heroicons-circle-stack-20-solid"
             title="暂无模型列表"
-            description="保存配置后获取一次模型列表。"
+            :description="selectedPlatform.format === 'vertex' ? '请手动添加需要使用的模型。' : '保存配置后拉取模型列表，或手动添加自定义模型。'"
           />
+
+          <div class="flex items-center gap-2">
+            <UInput
+              v-model="customModelInput"
+              class="flex-1"
+              placeholder="输入自定义模型名称"
+              @keydown.enter="handleAddCustomModel"
+            />
+            <UButton
+              label="添加"
+              color="neutral"
+              variant="outline"
+              :disabled="!customModelInput.trim()"
+              @click="handleAddCustomModel"
+            />
+          </div>
         </div>
       </UCard>
 
@@ -207,7 +291,19 @@
 import { useModelPlatforms } from '~/composables/modelPlatforms'
 import type { ApiFormat } from '~/composables/modelPlatforms'
 
-const { platforms, addPlatform, updatePlatform, removePlatform, fetchModels } = useModelPlatforms()
+const {
+  platforms,
+  addPlatform,
+  updatePlatform,
+  removePlatform,
+  togglePlatformEnabled,
+  enableModel,
+  disableModel,
+  addCustomModel,
+  removeModel,
+  fetchModels,
+} = useModelPlatforms()
+
 const toast = useToast()
 
 const selectedId = ref<string | null>(null)
@@ -216,15 +312,27 @@ const selectedPlatform = computed(() => platforms.value.find(p => p.id === selec
 const editBaseUrl = ref('')
 const editApiKey = ref('')
 const showApiKey = ref(false)
+const editRegion = ref('global')
+const editCredentialsJson = ref('')
 
 watch(selectedPlatform, (p) => {
   if (p) {
-    editBaseUrl.value = p.baseUrl
-    editApiKey.value = p.apiKey
+    if (p.format === 'vertex') {
+      editCredentialsJson.value = p.apiKey
+      editRegion.value = p.region ?? 'global'
+    }
+    else {
+      editBaseUrl.value = p.baseUrl
+      editApiKey.value = p.apiKey
+    }
+    showApiKey.value = false
+    customModelInput.value = ''
   }
   else {
     editBaseUrl.value = ''
     editApiKey.value = ''
+    editCredentialsJson.value = ''
+    editRegion.value = 'global'
     showApiKey.value = false
   }
 }, { immediate: true })
@@ -234,24 +342,79 @@ watch(platforms, (items) => {
     selectedId.value = null
     return
   }
-
   if (!selectedId.value || !items.some(item => item.id === selectedId.value)) {
     selectedId.value = items[0]?.id ?? null
   }
 }, { immediate: true })
 
+function getFormatLabel(format: ApiFormat) {
+  switch (format) {
+    case 'openai': return 'OpenAI'
+    case 'google': return 'Google AI'
+    case 'vertex': return 'Vertex AI'
+    default: return format
+  }
+}
+
 const showAddModal = ref(false)
 const newPlatformName = ref('')
 const newPlatformFormat = ref<ApiFormat>('openai')
-const formatOptions = [{ label: 'OpenAI 兼容格式', value: 'openai' }]
+const formatOptions = [
+  { label: 'OpenAI 兼容格式', value: 'openai' },
+  { label: 'Google AI 格式', value: 'google' },
+  { label: 'Google Vertex AI', value: 'vertex' },
+]
 
-function getFormatLabel(format: ApiFormat) {
-  switch (format) {
-    case 'openai':
-      return 'OpenAI 兼容'
-    default:
-      return format
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+const parsedVertexCreds = computed<{ project_id: string, client_email: string } | null>(() => {
+  if (!editCredentialsJson.value) return null
+  try {
+    const parsed = JSON.parse(editCredentialsJson.value)
+    if (parsed.type === 'service_account' && parsed.project_id && parsed.private_key)
+      return parsed as { project_id: string, client_email: string }
+    return null
   }
+  catch { return null }
+})
+
+const computedVertexEndpoint = computed(() => {
+  if (!parsedVertexCreds.value) return ''
+  const { project_id } = parsedVertexCreds.value
+  const loc = editRegion.value.trim() || 'global'
+  if (loc === 'global')
+    return `https://aiplatform.googleapis.com/v1beta1/projects/${project_id}/locations/global/endpoints/openapi`
+  return `https://${loc}-aiplatform.googleapis.com/v1beta1/projects/${project_id}/locations/${loc}/endpoints/openapi`
+})
+
+const canFetchModels = computed(() => {
+  if (!selectedPlatform.value) return false
+  if (selectedPlatform.value.format === 'vertex') return false
+  return !!(editBaseUrl.value && editApiKey.value)
+})
+
+function handleCredentialFileUpload(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const text = e.target?.result as string
+    try {
+      const parsed = JSON.parse(text)
+      if (parsed.type !== 'service_account' || !parsed.private_key) {
+        toast.add({ title: '不是有效的服务账号 JSON 文件', color: 'error' })
+        return
+      }
+      editCredentialsJson.value = text
+      toast.add({ title: `已加载项目 ${parsed.project_id}`, color: 'success' })
+    }
+    catch {
+      toast.add({ title: '无法解析 JSON 文件', color: 'error' })
+    }
+  }
+  reader.readAsText(file)
+  input.value = ''
 }
 
 function handleAddPlatform() {
@@ -266,12 +429,27 @@ function handleAddPlatform() {
 }
 
 function handleSave() {
-  if (!selectedId.value) return
+  if (!selectedId.value || !selectedPlatform.value) return
 
-  updatePlatform(selectedId.value, {
-    baseUrl: editBaseUrl.value.trim(),
-    apiKey: editApiKey.value.trim(),
-  })
+  if (selectedPlatform.value.format === 'vertex') {
+    const creds = parsedVertexCreds.value
+    if (editCredentialsJson.value && !creds) {
+      toast.add({ title: '请上传有效的服务账号 JSON 文件', color: 'error' })
+      return
+    }
+    const region = editRegion.value.trim() || 'global'
+    updatePlatform(selectedId.value, {
+      apiKey: editCredentialsJson.value,
+      baseUrl: computedVertexEndpoint.value || selectedPlatform.value.defaultBaseUrl,
+      region,
+    })
+  }
+  else {
+    updatePlatform(selectedId.value, {
+      baseUrl: editBaseUrl.value.trim(),
+      apiKey: editApiKey.value.trim(),
+    })
+  }
   toast.add({ title: '已保存', color: 'success' })
 }
 
@@ -292,8 +470,8 @@ async function handleFetchModels() {
   fetchError.value = ''
 
   try {
-    await fetchModels(selectedId.value)
-    toast.add({ title: `已获取 ${selectedPlatform.value?.models.length ?? 0} 个模型`, color: 'success' })
+    const models = await fetchModels(selectedId.value)
+    toast.add({ title: `已获取 ${models.length} 个模型`, color: 'success' })
   }
   catch (e: any) {
     fetchError.value = e?.message ?? '拉取模型列表失败'
@@ -302,5 +480,16 @@ async function handleFetchModels() {
   finally {
     fetchingModels.value = false
   }
+}
+
+const customModelInput = ref('')
+
+function handleAddCustomModel() {
+  if (!selectedId.value) return
+  const name = customModelInput.value.trim()
+  if (!name) return
+  addCustomModel(selectedId.value, name)
+  customModelInput.value = ''
+  toast.add({ title: `已添加自定义模型「${name}」`, color: 'success' })
 }
 </script>

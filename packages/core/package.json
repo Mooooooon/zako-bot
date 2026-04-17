@@ -14,13 +14,16 @@
   "publishConfig": {
     "access": "public"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@google/genai": "^1.50.1",
     "@zakobot/database": "workspace:*",
     "@zakobot/shared": "workspace:*",
     "discord.js": "^14.18.0",

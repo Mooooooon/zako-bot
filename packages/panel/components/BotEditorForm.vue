@@ -214,16 +214,18 @@ const platformOptions: SelectOption[] = [
 const roleOptions = computed(() => props.roleOptions)
 
 const modelOptions = computed<ModelOption[]>(() =>
-  platforms.value.flatMap(platform =>
-    platform.models.map(model => ({
-      label: `${platform.name}-${model}`,
-      value: `${platform.id}::${model}`,
-      apiKey: platform.apiKey,
-      baseUrl: platform.baseUrl,
-      model,
-      platformName: platform.name,
-    })),
-  ),
+  platforms.value
+    .filter(p => p.enabled)
+    .flatMap(platform =>
+      platform.enabledModels.map(model => ({
+        label: `${platform.name}-${model}`,
+        value: `${platform.id}::${model}`,
+        apiKey: platform.apiKey,
+        baseUrl: platform.baseUrl,
+        model,
+        platformName: platform.name,
+      })),
+    ),
 )
 
 const modelSelectOptions = computed<SelectOption[]>(() => {

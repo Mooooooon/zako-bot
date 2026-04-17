@@ -1,24 +1,81 @@
 import OpenAI from 'openai'
+import { GoogleGenAI } from '@google/genai'
+import type { Content, Part, Tool as GenAITool } from '@google/genai'
 import type { AgentEvent, LLMConfig, ChatMessage, LLMTool, ToolApprovalCallback } from '@zakobot/shared'
 
 const MAX_TOOL_CALL_ROUNDS = 8
 
+interface ServiceAccountCreds {
+  type: string
+  project_id: string
+  private_key: string
+  client_email: string
+  token_uri: string
+}
+
+function parseServiceAccount(apiKey: string): ServiceAccountCreds | null {
+  try {
+    const parsed = JSON.parse(apiKey) as ServiceAccountCreds
+    if (parsed.type === 'service_account' && parsed.private_key && parsed.client_email)
+      return parsed
+    return null
+  }
+  catch { return null }
+}
+
+function extractVertexLocation(baseUrl: string): string {
+  // Parse from URL path: /locations/{location}/
+  const pathMatch = baseUrl.match(/\/locations\/([^/]+)\//)
+  if (pathMatch) return pathMatch[1]!
+  // Fallback: regional subdomain https://{location}-aiplatform.googleapis.com
+  const hostMatch = baseUrl.match(/^https?:\/\/([a-z0-9-]+)-aiplatform\.googleapis\.com/)
+  if (hostMatch) return hostMatch[1]!
+  return 'us-central1'
+}
+
+let _callCounter = 0
+function genCallId(): string {
+  return `call_${(++_callCounter).toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+}
+
 export class LLMClient {
-  private openai: OpenAI
+  private openai?: OpenAI
+  private genai?: GoogleGenAI
+  private vertexCreds: ServiceAccountCreds | null
 
   constructor(private config: LLMConfig) {
-    this.openai = new OpenAI({
-      apiKey: config.apiKey,
-      baseURL: config.baseUrl, // undefined = use OpenAI default
-    })
+    this.vertexCreds = parseServiceAccount(config.apiKey)
+
+    if (this.vertexCreds) {
+      const location = extractVertexLocation(config.baseUrl ?? '')
+      this.genai = new GoogleGenAI({
+        vertexai: true,
+        project: this.vertexCreds.project_id,
+        location,
+        googleAuthOptions: {
+          credentials: this.vertexCreds as unknown as Record<string, string>,
+          scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+        },
+      })
+    }
+    else {
+      this.openai = new OpenAI({
+        apiKey: config.apiKey,
+        baseURL: config.baseUrl,
+      })
+    }
   }
 
   async chat(messages: ChatMessage[], tools: LLMTool[] = [], maxToolCallRounds = MAX_TOOL_CALL_ROUNDS): Promise<string> {
+    if (this.genai) {
+      return this.chatVertex(messages, tools, maxToolCallRounds)
+    }
+
     const requestMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [...messages]
     const toolDefinitions = this.buildToolDefinitions(tools)
 
     for (let i = 0; i < maxToolCallRounds; i += 1) {
-      const response = await this.openai.chat.completions.create({
+      const response = await this.openai!.chat.completions.create({
         model: this.config.model,
         messages: requestMessages,
         ...(toolDefinitions.length > 0
@@ -43,7 +100,7 @@ export class LLMClient {
 
     console.warn(`[LLM] Reached tool-call limit (${maxToolCallRounds}); requesting final answer without tools.`)
 
-    const finalResponse = await this.openai.chat.completions.create({
+    const finalResponse = await this.openai!.chat.completions.create({
       model: this.config.model,
       messages: [
         ...requestMessages,
@@ -68,12 +125,17 @@ export class LLMClient {
     tools: LLMTool[] = [],
     options: { maxToolCallRounds?: number; requestApproval?: ToolApprovalCallback } = {},
   ): AsyncGenerator<AgentEvent> {
+    if (this.genai) {
+      yield* this.chatStreamVertex(messages, tools, options)
+      return
+    }
+
     const { maxToolCallRounds = MAX_TOOL_CALL_ROUNDS, requestApproval } = options
     const requestMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [...messages]
     const toolDefinitions = this.buildToolDefinitions(tools)
 
     for (let round = 0; round < maxToolCallRounds; round++) {
-      const response = await this.openai.chat.completions.create({
+      const response = await this.openai!.chat.completions.create({
         model: this.config.model,
         messages: requestMessages,
         ...(toolDefinitions.length > 0
@@ -146,8 +208,8 @@ export class LLMClient {
       requestMessages.push(...toolResultMessages)
     }
 
-    console.warn(`[LLM] Reached tool-call limit (${maxToolCallRounds}); requesting final answer without tools.`)
-    const finalResponse = await this.openai.chat.completions.create({
+    console.warn(`[LLM] Reached tool-call limit (${MAX_TOOL_CALL_ROUNDS}); requesting final answer without tools.`)
+    const finalResponse = await this.openai!.chat.completions.create({
       model: this.config.model,
       messages: [
         ...requestMessages,
@@ -169,6 +231,187 @@ export class LLMClient {
 
     yield { type: 'done', content: finalMessage.content ?? '' }
   }
+
+  // ── Vertex AI (Google GenAI SDK) ──────────────────────────────────────────
+
+  private async chatVertex(messages: ChatMessage[], tools: LLMTool[], maxRounds: number): Promise<string> {
+    const { systemInstruction, contents } = this.toGenAIContents(messages)
+    const genAITools = this.buildGenAITools(tools)
+
+    for (let round = 0; round < maxRounds; round++) {
+      const response = await this.genai!.models.generateContent({
+        model: this.config.model,
+        contents,
+        config: {
+          ...(systemInstruction ? { systemInstruction } : {}),
+          ...(genAITools.length ? { tools: genAITools } : {}),
+        },
+      })
+
+      const parts: Part[] = response.candidates?.[0]?.content?.parts ?? []
+      const funcCalls = parts.filter(p => p.functionCall)
+      const text = parts.filter(p => p.text).map(p => p.text).join('')
+
+      if (!funcCalls.length) return text
+
+      contents.push({ role: 'model', parts })
+
+      const responseParts: Part[] = []
+      for (const part of funcCalls) {
+        const fc = part.functionCall!
+        const tool = tools.find(t => t.name === fc.name)
+        let result: string
+        try {
+          if (!tool) throw new Error(`Tool "${fc.name}" is not available`)
+          const args = (fc.args ?? {}) as Record<string, unknown>
+          console.log(`[ToolCall] ${fc.name} ${this.formatLogValue(args)}`)
+          result = await tool.execute(args)
+          console.log(`[ToolResult] ${fc.name} ok length=${result.length}`)
+        }
+        catch (err) {
+          result = `Error: ${err instanceof Error ? err.message : String(err)}`
+          console.warn(`[ToolResult] ${fc.name} error="${this.escapeLogMessage(result)}"`)
+        }
+        responseParts.push({ functionResponse: { name: fc.name!, response: { result } } })
+      }
+      contents.push({ role: 'user', parts: responseParts })
+    }
+
+    console.warn(`[LLM] Reached tool-call limit (${maxRounds}); requesting final answer without tools.`)
+    const final = await this.genai!.models.generateContent({
+      model: this.config.model,
+      contents,
+      config: systemInstruction ? { systemInstruction } : {},
+    })
+    return final.candidates?.[0]?.content?.parts?.filter(p => p.text).map(p => p.text).join('') ?? ''
+  }
+
+  private async *chatStreamVertex(
+    messages: ChatMessage[],
+    tools: LLMTool[],
+    options: { maxToolCallRounds?: number; requestApproval?: ToolApprovalCallback },
+  ): AsyncGenerator<AgentEvent> {
+    const { maxToolCallRounds = MAX_TOOL_CALL_ROUNDS, requestApproval } = options
+    const { systemInstruction, contents } = this.toGenAIContents(messages)
+    const genAITools = this.buildGenAITools(tools)
+
+    for (let round = 0; round < maxToolCallRounds; round++) {
+      const response = await this.genai!.models.generateContent({
+        model: this.config.model,
+        contents,
+        config: {
+          ...(systemInstruction ? { systemInstruction } : {}),
+          ...(genAITools.length ? { tools: genAITools } : {}),
+        },
+      })
+
+      const parts: Part[] = response.candidates?.[0]?.content?.parts ?? []
+      const funcCalls = parts.filter(p => p.functionCall)
+      const text = parts.filter(p => p.text).map(p => p.text).join('')
+
+      if (text) {
+        for (const segment of this.splitSegments(text)) {
+          yield { type: 'text_chunk', content: segment }
+        }
+      }
+
+      if (!funcCalls.length) {
+        yield { type: 'done', content: text }
+        return
+      }
+
+      contents.push({ role: 'model', parts })
+
+      const responseParts: Part[] = []
+      for (const part of funcCalls) {
+        const fc = part.functionCall!
+        const callId = genCallId()
+        const tool = tools.find(t => t.name === fc.name)
+        const args = (fc.args ?? {}) as Record<string, unknown>
+
+        yield { type: 'tool_call', callId, name: fc.name!, input: args }
+
+        let result: string
+        let ok = true
+
+        try {
+          if (!tool) throw new Error(`Tool "${fc.name}" is not available`)
+
+          if (requestApproval) {
+            const approved = await requestApproval(callId, fc.name!, args)
+            if (!approved) {
+              result = 'User denied this tool call.'
+              ok = false
+              yield { type: 'tool_result', callId, name: fc.name!, result, ok }
+              responseParts.push({ functionResponse: { name: fc.name!, response: { result } } })
+              continue
+            }
+          }
+
+          console.log(`[ToolCall] ${fc.name} ${this.formatLogValue(args)}`)
+          result = await tool.execute(args)
+          console.log(`[ToolResult] ${fc.name} ok length=${result.length}`)
+        }
+        catch (err) {
+          result = `Error: ${err instanceof Error ? err.message : String(err)}`
+          ok = false
+          console.warn(`[ToolResult] ${fc.name} error="${this.escapeLogMessage(result)}"`)
+        }
+
+        yield { type: 'tool_result', callId, name: fc.name!, result, ok }
+        responseParts.push({ functionResponse: { name: fc.name!, response: { result } } })
+      }
+
+      contents.push({ role: 'user', parts: responseParts })
+    }
+
+    console.warn(`[LLM] Reached tool-call limit (${maxToolCallRounds}); requesting final answer without tools.`)
+    const final = await this.genai!.models.generateContent({
+      model: this.config.model,
+      contents,
+      config: systemInstruction ? { systemInstruction } : {},
+    })
+    const finalText = final.candidates?.[0]?.content?.parts?.filter(p => p.text).map(p => p.text).join('') ?? ''
+
+    if (finalText) {
+      for (const segment of this.splitSegments(finalText)) {
+        yield { type: 'text_chunk', content: segment }
+      }
+    }
+    yield { type: 'done', content: finalText }
+  }
+
+  private toGenAIContents(messages: ChatMessage[]): { systemInstruction: string; contents: Content[] } {
+    const systemParts: string[] = []
+    const contents: Content[] = []
+
+    for (const msg of messages) {
+      if (msg.role === 'system') {
+        systemParts.push(msg.content)
+      }
+      else {
+        contents.push({
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: msg.content }],
+        })
+      }
+    }
+
+    return { systemInstruction: systemParts.join('\n\n'), contents }
+  }
+
+  private buildGenAITools(tools: LLMTool[]): GenAITool[] {
+    if (!tools.length) return []
+    return [{
+      functionDeclarations: tools.map(t => ({
+        name: t.name,
+        description: t.description,
+        parameters: t.parameters as Record<string, unknown>,
+      })),
+    }]
+  }
+
+  // ── OpenAI helpers ────────────────────────────────────────────────────────
 
   private splitSegments(text: string, maxLength = 1800): string[] {
     const paragraphs = text.split(/\n{2,}/).map(s => s.trim()).filter(Boolean)
