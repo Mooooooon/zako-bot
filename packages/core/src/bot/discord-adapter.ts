@@ -1,5 +1,6 @@
 import { Client, GatewayIntentBits } from 'discord.js'
 import type { BotInstanceRow, RoleRow } from '@zakobot/database'
+import type { GeneralSettings } from '@zakobot/shared'
 import type { Agent } from '../llm/agent.js'
 import type { ConversationScope, ConversationService } from '../llm/conversation-service.js'
 
@@ -16,6 +17,7 @@ export class DiscordAdapter {
     readonly role: RoleRow,
     private agent: Agent,
     private conversations: ConversationService,
+    private getGeneralSettings: () => GeneralSettings,
   ) {
     this.client = new Client({
       intents: [
@@ -43,8 +45,9 @@ export class DiscordAdapter {
     if (this.instance.discordGuildId && msg.guildId !== this.instance.discordGuildId) return
 
     const isMentioned = this.client.user && msg.mentions.has(this.client.user)
+    const { requireMention } = this.getGeneralSettings()
 
-    if (this.instance.requireMention && !isMentioned) return
+    if (requireMention && !isMentioned) return
 
     // Strip the @mention prefix from the message
     const userText = msg.content

@@ -7,6 +7,7 @@ import type {
   RoleRow,
 } from '@zakobot/database'
 import { getEnabledBots, getBotWithRole } from '@zakobot/database'
+import type { GeneralSettings } from '@zakobot/shared'
 import { DiscordAdapter } from './discord-adapter.js'
 import { Agent } from '../llm/agent.js'
 import { ConversationService } from '../llm/conversation-service.js'
@@ -19,6 +20,7 @@ export class BotManager {
   constructor(
     private db: DB,
     private toolRegistry: ToolRegistry,
+    private getGeneralSettings: () => GeneralSettings,
   ) {
     this.conversations = new ConversationService(db)
   }
@@ -151,7 +153,7 @@ export class BotManager {
     }
 
     const agent = this.createAgent(row)
-    const adapter = new DiscordAdapter(row.instance, row.role, agent, this.conversations)
+    const adapter = new DiscordAdapter(row.instance, row.role, agent, this.conversations, this.getGeneralSettings)
 
     await adapter.start()
     this.adapters.set(row.instance.id, adapter)
@@ -200,6 +202,7 @@ export class BotManager {
       },
       this.conversations,
       this.toolRegistry,
+      this.getGeneralSettings,
     )
   }
 

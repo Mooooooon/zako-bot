@@ -17,6 +17,7 @@ import type { BotManager } from '../bot/bot-manager.js'
 import type { PluginLoader } from '../plugins/loader.js'
 import { getSearchSettings, saveSearchSettings } from '../settings/search-settings.js'
 import { getBrowseSettings, saveBrowseSettings } from '../settings/browse-settings.js'
+import { getGeneralSettings, saveGeneralSettings } from '../settings/general-settings.js'
 import type {
   ApiResponse,
   BotEditorInput,
@@ -29,6 +30,7 @@ import type {
   RoleProfile,
   BuiltinTool,
   BrowseSettings,
+  GeneralSettings,
   SearchSettings,
   SendConversationMessageInput,
   SendConversationMessageResult,
@@ -328,6 +330,19 @@ export class ApiServer {
     }
   }
 
+  private parseGeneralSettingsInput(body: Partial<GeneralSettings>): GeneralSettings {
+    const rounds = typeof body.maxToolCallRounds === 'number'
+      ? body.maxToolCallRounds
+      : Number(body.maxToolCallRounds)
+    const maxToolCallRounds = Number.isFinite(rounds)
+      ? Math.min(Math.max(Math.trunc(rounds), 1), 32)
+      : 8
+    return {
+      maxToolCallRounds,
+      requireMention: body.requireMention === false ? false : true,
+    }
+  }
+
   private parseSearchSettingsInput(body: Partial<SearchSettings>): SearchSettings {
     return {
       provider: body.provider === 'tavily' ? 'tavily' : 'google_web',
@@ -444,6 +459,21 @@ export class ApiServer {
       try {
         const payload = this.parseBrowseSettingsInput(await this.readJson<BrowseSettings>(req))
         return this.json(res, { ok: true, data: saveBrowseSettings(this.db, payload) })
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid request body'
+        return this.json(res, { ok: false, error: message }, 400)
+      }
+    }
+
+    if (pathname === '/settings/general' && req.method === 'GET') {
+      return this.json(res, { ok: true, data: getGeneralSettings(this.db) })
+    }
+
+    if (pathname === '/settings/general' && req.method === 'PUT') {
+      try {
+        const payload = this.parseGeneralSettingsInput(await this.readJson<GeneralSettings>(req))
+        return this.json(res, { ok: true, data: saveGeneralSettings(this.db, payload) })
       }
       catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid request body'

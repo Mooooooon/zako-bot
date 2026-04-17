@@ -1,0 +1,43 @@
+import { getAppSetting, setAppSetting } from '@zakobot/database'
+import type { DB } from '@zakobot/database'
+import type { GeneralSettings } from '@zakobot/shared'
+
+const GENERAL_SETTINGS_KEY = 'general'
+const DEFAULT_MAX_TOOL_CALL_ROUNDS = 8
+
+export function getGeneralSettings(db: DB): GeneralSettings {
+  const row = getAppSetting(db, GENERAL_SETTINGS_KEY)
+
+  if (!row) {
+    return normalizeGeneralSettings({
+      maxToolCallRounds: process.env.MAX_TOOL_CALL_ROUNDS,
+      requireMention: process.env.REQUIRE_MENTION,
+    })
+  }
+
+  try {
+    return normalizeGeneralSettings(JSON.parse(row.value) as Record<string, unknown>)
+  }
+  catch {
+    return normalizeGeneralSettings({})
+  }
+}
+
+export function saveGeneralSettings(db: DB, value: Partial<GeneralSettings>): GeneralSettings {
+  const settings = normalizeGeneralSettings(value as Record<string, unknown>)
+  setAppSetting(db, GENERAL_SETTINGS_KEY, JSON.stringify(settings))
+  return settings
+}
+
+function normalizeGeneralSettings(value: Record<string, unknown>): GeneralSettings {
+  return {
+    maxToolCallRounds: normalizeMaxToolCallRounds(value.maxToolCallRounds),
+    requireMention: value.requireMention === false || value.requireMention === 'false' ? false : true,
+  }
+}
+
+function normalizeMaxToolCallRounds(value: unknown): number {
+  const num = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(num)) return DEFAULT_MAX_TOOL_CALL_ROUNDS
+  return Math.min(Math.max(Math.trunc(num), 1), 32)
+}

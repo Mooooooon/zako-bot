@@ -10,6 +10,7 @@ import { seed } from './seed.js'
 import { createDefaultToolRegistry } from './tools/index.js'
 import { getSearchSettings } from './settings/search-settings.js'
 import { getBrowseSettings } from './settings/browse-settings.js'
+import { getGeneralSettings } from './settings/general-settings.js'
 
 const zakobotHome = process.env.ZAKOBOT_HOME ?? resolve(homedir(), '.zakobot')
 mkdirSync(zakobotHome, { recursive: true })
@@ -26,7 +27,7 @@ async function main() {
     () => getSearchSettings(db),
     () => getBrowseSettings(db),
   )
-  const botManager = new BotManager(db, toolRegistry)
+  const botManager = new BotManager(db, toolRegistry, () => getGeneralSettings(db))
   const pluginLoader = new PluginLoader(botManager, toolRegistry)
   const apiServer = new ApiServer(db, botManager, pluginLoader)
 

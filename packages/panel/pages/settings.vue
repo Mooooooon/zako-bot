@@ -35,6 +35,13 @@ const route = useRoute()
 
 const settingItems = [
   {
+    label: '通用设置',
+    icon: 'i-heroicons-adjustments-horizontal-20-solid',
+    value: 'general',
+    to: '/settings/general',
+    match: '/settings/general',
+  },
+  {
     label: '模型设置',
     icon: 'i-heroicons-cpu-chip-20-solid',
     value: 'models',

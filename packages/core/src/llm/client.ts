@@ -13,11 +13,11 @@ export class LLMClient {
     })
   }
 
-  async chat(messages: ChatMessage[], tools: LLMTool[] = []): Promise<string> {
+  async chat(messages: ChatMessage[], tools: LLMTool[] = [], maxToolCallRounds = MAX_TOOL_CALL_ROUNDS): Promise<string> {
     const requestMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [...messages]
     const toolDefinitions = this.buildToolDefinitions(tools)
 
-    for (let i = 0; i < MAX_TOOL_CALL_ROUNDS; i += 1) {
+    for (let i = 0; i < maxToolCallRounds; i += 1) {
       const response = await this.openai.chat.completions.create({
         model: this.config.model,
         messages: requestMessages,
@@ -41,7 +41,7 @@ export class LLMClient {
       requestMessages.push(...await this.executeToolCalls(message, tools))
     }
 
-    console.warn(`[LLM] Reached tool-call limit (${MAX_TOOL_CALL_ROUNDS}); requesting final answer without tools.`)
+    console.warn(`[LLM] Reached tool-call limit (${maxToolCallRounds}); requesting final answer without tools.`)
 
     const finalResponse = await this.openai.chat.completions.create({
       model: this.config.model,

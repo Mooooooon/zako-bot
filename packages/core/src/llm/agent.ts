@@ -1,5 +1,5 @@
 import type { RoleRow } from '@zakobot/database'
-import type { LLMConfig, LLMTool } from '@zakobot/shared'
+import type { GeneralSettings, LLMConfig, LLMTool } from '@zakobot/shared'
 import { LLMClient } from './client.js'
 import { ConversationService } from './conversation-service.js'
 import type { ToolRegistry } from '../tools/index.js'
@@ -12,14 +12,15 @@ export class Agent {
     llmConfig: LLMConfig,
     private conversations: ConversationService,
     private toolRegistry: ToolRegistry,
+    private getGeneralSettings: () => GeneralSettings,
   ) {
     this.client = new LLMClient(llmConfig)
   }
 
   async respond(topicId: string): Promise<string> {
+    const { maxToolCallRounds } = this.getGeneralSettings()
     const history = this.conversations.listTopicHistory(topicId)
 
-    // Filter tools by what this role allows
     const enabledTools = this.parseEnabledTools(this.role.enabledTools)
     const allowedTools = this.toolRegistry.listEnabled(enabledTools)
     const toolPrompt = this.buildToolPrompt(allowedTools)
@@ -31,7 +32,7 @@ export class Agent {
       ...history,
     ]
 
-    const reply = await this.client.chat(messages, allowedTools)
+    const reply = await this.client.chat(messages, allowedTools, maxToolCallRounds)
     return reply
   }
 

@@ -3,5 +3,5 @@
 </template>
 
 <script setup lang="ts">
-navigateTo('/settings/password', { redirectCode: 302 })
+navigateTo('/settings/general', { redirectCode: 302 })
 </script>
