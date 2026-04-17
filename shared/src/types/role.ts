@@ -1,6 +1,6 @@
 import type { LLMConfig } from './llm.js'
 
-export type BuiltinTool = 'web_search' | 'web_browse'
+export type BuiltinTool = 'web_search' | 'web_browse' | 'shell_exec' | 'file_read' | 'file_write' | 'file_edit' | 'file_list'
 
 export interface RoleEditorInput {
   avatar: string

@@ -1,5 +1,7 @@
 import { createWebBrowseTool } from './builtins/web-browse.js'
 import { createWebSearchTool } from './builtins/web-search.js'
+import { createShellExecTool } from './builtins/shell-exec.js'
+import { createFileReadTool, createFileWriteTool, createFileEditTool, createFileListTool } from './builtins/file-tools.js'
 import { ToolRegistry } from './registry.js'
 import type { BrowseSettings } from '@zakobot/shared'
 import type { SearchSettings } from '@zakobot/shared'
@@ -14,6 +16,11 @@ export function createDefaultToolRegistry(
 
   registry.register(createWebSearchTool(getSearchSettings), { source: 'builtin' })
   registry.register(createWebBrowseTool(getBrowseSettings), { source: 'builtin' })
+  registry.register(createShellExecTool(), { source: 'builtin' })
+  registry.register(createFileReadTool(), { source: 'builtin' })
+  registry.register(createFileWriteTool(), { source: 'builtin' })
+  registry.register(createFileEditTool(), { source: 'builtin' })
+  registry.register(createFileListTool(), { source: 'builtin' })
 
   return registry
 }

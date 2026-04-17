@@ -1,8 +1,22 @@
-import { Client, GatewayIntentBits } from 'discord.js'
+import {
+  Client,
+  GatewayIntentBits,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+} from 'discord.js'
+import type { Message, TextBasedChannel } from 'discord.js'
 import type { BotInstanceRow, RoleRow } from '@zakobot/database'
-import type { GeneralSettings } from '@zakobot/shared'
+import type { AgentEvent, GeneralSettings, ToolApprovalCallback } from '@zakobot/shared'
 import type { Agent } from '../llm/agent.js'
 import type { ConversationScope, ConversationService } from '../llm/conversation-service.js'
+
+const TOOL_APPROVAL_TIMEOUT_MS = 5 * 60 * 1000
+
+type MsgPayload = {
+  content: string
+  components?: ActionRowBuilder<ButtonBuilder>[]
+}
 
 const NEW_TOPIC_COMMAND = {
   name: 'new',
@@ -11,6 +25,7 @@ const NEW_TOPIC_COMMAND = {
 
 export class DiscordAdapter {
   readonly client: Client
+  private pendingApprovals = new Map<string, (approved: boolean) => void>()
 
   constructor(
     readonly instance: BotInstanceRow,
@@ -38,7 +53,7 @@ export class DiscordAdapter {
     this.client.on('interactionCreate', (interaction) => this.handleInteraction(interaction))
   }
 
-  private async handleMessage(msg: import('discord.js').Message) {
+  private async handleMessage(msg: Message) {
     if (msg.author.bot) return
 
     if (this.instance.discordUserId && msg.author.id !== this.instance.discordUserId) return
@@ -49,15 +64,12 @@ export class DiscordAdapter {
 
     if (requireMention && !isMentioned) return
 
-    // Strip the @mention prefix from the message
-    const userText = msg.content
-      .replace(/<@!?\d+>/g, '')
-      .trim()
-
+    const userText = msg.content.replace(/<@!?\d+>/g, '').trim()
     if (!userText) return
 
-    // PartialGroupDMChannel doesn't support sending — guard against it
     if (!('send' in msg.channel)) return
+
+    let anySentToUser = false
 
     try {
       if (userText === '/new') {
@@ -66,7 +78,6 @@ export class DiscordAdapter {
         return
       }
 
-      // Thread mode: create a new thread per message in non-thread guild channels
       if (threadMode && !msg.channel.isThread() && msg.inGuild()) {
         const thread = await msg.startThread({ name: userText.slice(0, 100) })
         const scope = this.buildChannelScope(thread.id, msg.guildId)
@@ -80,20 +91,14 @@ export class DiscordAdapter {
           metadata: { mentionCount: msg.mentions.users.size },
         })
         await thread.sendTyping()
-        const reply = await this.agent.respond(topic.id)
+        const send = (payload: MsgPayload) => thread.send(payload).then((m) => { anySentToUser = true; return m })
+        const fullReply = await this.runStream(topic.id, send)
         this.conversations.appendMessage(this.instance, topic.id, scope, {
           role: 'assistant',
-          content: reply,
+          content: fullReply,
           senderId: this.client.user?.id ?? '',
           senderName: this.client.user?.username ?? this.instance.name,
         })
-        if (reply.length <= 2000) {
-          await thread.send(reply)
-        } else {
-          for (let i = 0; i < reply.length; i += 2000) {
-            await thread.send(reply.slice(i, i + 2000))
-          }
-        }
         return
       }
 
@@ -105,35 +110,159 @@ export class DiscordAdapter {
         platformMessageId: msg.id,
         senderId: msg.author.id,
         senderName: msg.author.username,
-        metadata: {
-          mentionCount: msg.mentions.users.size,
-        },
+        metadata: { mentionCount: msg.mentions.users.size },
       })
 
       await msg.channel.sendTyping()
-      const reply = await this.agent.respond(topic.id)
+      let firstSent = false
+      const send = (payload: MsgPayload): Promise<Message> => {
+        const p = firstSent
+          ? (msg.channel as TextBasedChannel & { send: (p: MsgPayload) => Promise<Message> }).send(payload)
+          : msg.reply(payload)
+        firstSent = true
+        return p.then((m) => { anySentToUser = true; return m })
+      }
+      const fullReply = await this.runStream(topic.id, send)
       this.conversations.appendMessage(this.instance, topic.id, scope, {
         role: 'assistant',
-        content: reply,
+        content: fullReply,
         senderId: this.client.user?.id ?? '',
         senderName: this.client.user?.username ?? this.instance.name,
       })
-
-      // Discord has a 2000 char limit per message
-      if (reply.length <= 2000) {
-        await msg.reply(reply)
-      } else {
-        for (let i = 0; i < reply.length; i += 2000) {
-          await msg.channel.send(reply.slice(i, i + 2000))
-        }
-      }
-    } catch (err) {
+    }
+    catch (err) {
       console.error(`[Discord] Agent error in "${this.instance.name}":`, err)
-      await msg.reply('Something went wrong, please try again.').catch(() => {})
+      if (!anySentToUser) {
+        await msg.reply('Something went wrong, please try again.').catch(() => {})
+      }
     }
   }
 
+  private async runStream(
+    topicId: string,
+    send: (payload: MsgPayload) => Promise<Message>,
+  ): Promise<string> {
+    const { toolApprovalMode, toolProcessMode } = this.getGeneralSettings()
+
+    let requestApproval: ToolApprovalCallback | undefined
+
+    if (toolApprovalMode !== 'none') {
+      requestApproval = async (callId, name, input) => {
+        if (toolApprovalMode === 'sensitive' && !this.agent.isToolSensitive(name)) {
+          return true
+        }
+
+        const inputStr = JSON.stringify(input, null, 2)
+        const display = inputStr.length > 800 ? `${inputStr.slice(0, 800)}\n...` : inputStr
+        const content = `🔧 **调用工具：${name}**\n\`\`\`json\n${display}\n\`\`\``
+
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`tool_approve:${callId}`)
+            .setLabel('允许')
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId(`tool_deny:${callId}`)
+            .setLabel('拒绝')
+            .setStyle(ButtonStyle.Danger),
+        )
+
+        const approvalMsg = await send({ content, components: [row] })
+
+        return new Promise<boolean>((resolve) => {
+          const timer = setTimeout(() => {
+            this.pendingApprovals.delete(callId)
+            resolve(false)
+            void approvalMsg.edit({
+              content: content.replace(/^🔧 \*\*/, '⏰ **') + '\n— 超时已自动拒绝',
+              components: [],
+            }).catch(() => {})
+          }, TOOL_APPROVAL_TIMEOUT_MS)
+
+          this.pendingApprovals.set(callId, (approved) => {
+            clearTimeout(timer)
+            this.pendingApprovals.delete(callId)
+            resolve(approved)
+          })
+        })
+      }
+    }
+
+    let fullContent = ''
+    let anySent = false
+
+    for await (const event of this.agent.respondStream(topicId, requestApproval)) {
+      switch (event.type) {
+        case 'text_chunk':
+          if (event.content.trim()) {
+            await send({ content: event.content })
+            anySent = true
+          }
+          break
+        case 'tool_call': {
+          if (toolProcessMode === 'none') break
+          // Only send a brief notification when no approval dialog will cover it
+          const approvalWillShow = toolApprovalMode !== 'none'
+            && !(toolApprovalMode === 'sensitive' && !this.agent.isToolSensitive(event.name))
+          if (!approvalWillShow) {
+            await send({ content: `🔧 **调用工具：${event.name}**` })
+            anySent = true
+          }
+          break
+        }
+        case 'tool_result':
+          if (toolProcessMode === 'full') {
+            await send({ content: this.formatToolResult(event) })
+            anySent = true
+          }
+          break
+        case 'done':
+          fullContent = event.content
+          break
+      }
+    }
+
+    if (!anySent) {
+      await send({ content: '（无回复）' })
+    }
+
+    return fullContent
+  }
+
+  private formatToolResult(event: Extract<AgentEvent, { type: 'tool_result' }>): string {
+    if (!event.ok) {
+      return event.result === 'User denied this tool call.'
+        ? `❌ **${event.name}** — 已拒绝`
+        : `⚠️ **${event.name}** — ${event.result.slice(0, 300)}`
+    }
+    if (!event.result.trim()) return `✅ **${event.name}** — 完成`
+    const display = event.result.length > 800
+      ? `${event.result.slice(0, 800)}\n...（共 ${event.result.length} 字符）`
+      : event.result
+    return `✅ **${event.name}**\n\`\`\`\n${display}\n\`\`\``
+  }
+
   private async handleInteraction(interaction: import('discord.js').Interaction) {
+    if (interaction.isButton()) {
+      const [action, callId] = interaction.customId.split(':')
+      if ((action === 'tool_approve' || action === 'tool_deny') && callId) {
+        const resolver = this.pendingApprovals.get(callId)
+        const approved = action === 'tool_approve'
+        if (resolver) {
+          const updatedContent = interaction.message.content.replace(
+            /^🔧 \*\*/,
+            approved ? '✅ **' : '❌ **',
+          )
+          await interaction.update({ content: updatedContent, components: [] }).catch(() => {})
+          resolver(approved)
+        }
+        else {
+          await interaction.reply({ content: '此操作已过期。', ephemeral: true }).catch(() => {})
+        }
+        return
+      }
+    }
+
     if (!interaction.isChatInputCommand()) return
     if (interaction.commandName !== NEW_TOPIC_COMMAND.name) return
 

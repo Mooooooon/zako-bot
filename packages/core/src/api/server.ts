@@ -337,10 +337,20 @@ export class ApiServer {
     const maxToolCallRounds = Number.isFinite(rounds)
       ? Math.min(Math.max(Math.trunc(rounds), 1), 32)
       : 8
+    const toolApprovalMode = body.toolApprovalMode === 'all' || body.toolApprovalMode === 'sensitive' || body.toolApprovalMode === 'none'
+      ? body.toolApprovalMode
+      : 'all'
+    const toolProcessMode = body.toolProcessMode === 'none' || body.toolProcessMode === 'tools_only' || body.toolProcessMode === 'full'
+      ? body.toolProcessMode
+      : 'full'
     return {
       maxToolCallRounds,
       requireMention: body.requireMention === false ? false : true,
       threadMode: body.threadMode === true ? true : false,
+      sendTime: body.sendTime === true ? true : false,
+      timezone: typeof body.timezone === 'string' && body.timezone.trim() ? body.timezone.trim() : 'UTC',
+      toolApprovalMode,
+      toolProcessMode,
     }
   }
 
@@ -388,7 +398,7 @@ export class ApiServer {
       return []
     }
 
-    const allowed = new Set<BuiltinTool>(['web_search', 'web_browse'])
+    const allowed = new Set<BuiltinTool>(['web_search', 'web_browse', 'shell_exec', 'file_read', 'file_write', 'file_edit', 'file_list'])
     return [...new Set(value)].filter((tool): tool is BuiltinTool =>
       typeof tool === 'string' && allowed.has(tool as BuiltinTool),
     )

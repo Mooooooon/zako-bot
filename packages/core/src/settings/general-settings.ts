@@ -1,6 +1,6 @@
 import { getAppSetting, setAppSetting } from '@zakobot/database'
 import type { DB } from '@zakobot/database'
-import type { GeneralSettings } from '@zakobot/shared'
+import type { GeneralSettings, ToolApprovalMode, ToolProcessMode } from '@zakobot/shared'
 
 const GENERAL_SETTINGS_KEY = 'general'
 const DEFAULT_MAX_TOOL_CALL_ROUNDS = 8
@@ -34,7 +34,21 @@ function normalizeGeneralSettings(value: Record<string, unknown>): GeneralSettin
     maxToolCallRounds: normalizeMaxToolCallRounds(value.maxToolCallRounds),
     requireMention: value.requireMention === false || value.requireMention === 'false' ? false : true,
     threadMode: value.threadMode === true || value.threadMode === 'true' ? true : false,
+    sendTime: value.sendTime === true || value.sendTime === 'true' ? true : false,
+    timezone: typeof value.timezone === 'string' && value.timezone.trim() ? value.timezone.trim() : 'UTC',
+    toolApprovalMode: normalizeToolApprovalMode(value.toolApprovalMode),
+    toolProcessMode: normalizeToolProcessMode(value.toolProcessMode),
   }
+}
+
+function normalizeToolApprovalMode(value: unknown): ToolApprovalMode {
+  if (value === 'all' || value === 'sensitive' || value === 'none') return value
+  return 'all'
+}
+
+function normalizeToolProcessMode(value: unknown): ToolProcessMode {
+  if (value === 'none' || value === 'tools_only' || value === 'full') return value
+  return 'full'
 }
 
 function normalizeMaxToolCallRounds(value: unknown): number {

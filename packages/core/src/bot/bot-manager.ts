@@ -6,7 +6,7 @@ import type {
   BotInstanceRow,
   RoleRow,
 } from '@zakobot/database'
-import { getEnabledBots, getBotWithRole } from '@zakobot/database'
+import { getEnabledBots, getBotWithRole, getRole } from '@zakobot/database'
 import type { GeneralSettings } from '@zakobot/shared'
 import { DiscordAdapter } from './discord-adapter.js'
 import { Agent } from '../llm/agent.js'
@@ -192,8 +192,10 @@ export class BotManager {
   }
 
   private createAgent(row: { instance: BotInstanceRow; role: RoleRow }) {
+    const roleId = row.role.id
+    const fallbackRole = row.role
     return new Agent(
-      row.role,
+      () => getRole(this.db, roleId) ?? fallbackRole,
       {
         provider: row.instance.llmProvider as 'openai',
         model: row.instance.llmModel,

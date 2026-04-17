@@ -14,6 +14,8 @@ export interface LLMTool {
   description: string
   /** Prompt instructions injected when this tool is enabled for a role. */
   instructions?: string
+  /** Whether this tool requires explicit user approval in sensitive mode. */
+  sensitive?: boolean
   parameters: Record<string, unknown>
   execute: (args: Record<string, unknown>) => Promise<string>
 }

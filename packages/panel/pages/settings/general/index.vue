@@ -70,9 +70,71 @@
                   :disabled="saving"
                 />
               </UFormField>
+
+              <UFormField
+                label="工具调用安全级别"
+                name="toolApprovalMode"
+                description="控制哪些工具调用需要在 Discord 中弹出允许/拒绝确认。"
+              >
+                <div class="flex flex-col gap-2 pt-1">
+                  <label
+                    v-for="opt in toolApprovalOptions"
+                    :key="opt.value"
+                    class="flex cursor-pointer items-start gap-3 rounded-lg border border-[var(--border-subtle)] p-3 transition-colors"
+                    :class="form.toolApprovalMode === opt.value ? 'border-[var(--color-primary-500)] bg-[var(--color-primary-50)] dark:bg-[var(--color-primary-950)]' : 'hover:bg-[var(--bg-subtle)]'"
+                  >
+                    <input
+                      v-model="form.toolApprovalMode"
+                      type="radio"
+                      :value="opt.value"
+                      :disabled="saving"
+                      class="mt-0.5 accent-[var(--color-primary-500)]"
+                    >
+                    <div>
+                      <div class="text-sm font-medium text-[var(--text-primary)]">
+                        {{ opt.label }}
+                      </div>
+                      <div class="text-xs text-[var(--text-secondary)]">
+                        {{ opt.description }}
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </UFormField>
+
+              <UFormField
+                label="工具调用过程展示"
+                name="toolProcessMode"
+                description="控制 Discord 中工具调用过程的可见程度。"
+              >
+                <div class="flex flex-col gap-2 pt-1">
+                  <label
+                    v-for="opt in toolProcessOptions"
+                    :key="opt.value"
+                    class="flex cursor-pointer items-start gap-3 rounded-lg border border-[var(--border-subtle)] p-3 transition-colors"
+                    :class="form.toolProcessMode === opt.value ? 'border-[var(--color-primary-500)] bg-[var(--color-primary-50)] dark:bg-[var(--color-primary-950)]' : 'hover:bg-[var(--bg-subtle)]'"
+                  >
+                    <input
+                      v-model="form.toolProcessMode"
+                      type="radio"
+                      :value="opt.value"
+                      :disabled="saving"
+                      class="mt-0.5 accent-[var(--color-primary-500)]"
+                    >
+                    <div>
+                      <div class="text-sm font-medium text-[var(--text-primary)]">
+                        {{ opt.label }}
+                      </div>
+                      <div class="text-xs text-[var(--text-secondary)]">
+                        {{ opt.description }}
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </UFormField>
             </section>
 
-            <section v-else class="space-y-4">
+            <section v-else-if="activeSection === 'discord'" class="space-y-4">
               <UFormField
                 label="需要 @ 触发"
                 name="requireMention"
@@ -94,6 +156,31 @@
               </UFormField>
             </section>
 
+            <section v-else-if="activeSection === 'time'" class="space-y-4">
+              <UFormField
+                label="发送时间"
+                name="sendTime"
+                description="开启后在每次请求中将当前时间附加到用户最后一条消息末尾，让 LLM 感知时间上下文。"
+              >
+                <div class="flex h-10 items-center">
+                  <USwitch v-model="form.sendTime" :disabled="saving" />
+                </div>
+              </UFormField>
+
+              <UFormField
+                label="时区"
+                name="timezone"
+                description="发送时间所使用的时区，格式为 IANA 时区名称，例如 Asia/Shanghai、America/New_York、UTC。"
+              >
+                <UInput
+                  v-model="form.timezone"
+                  class="w-full"
+                  placeholder="Asia/Shanghai"
+                  :disabled="saving || !form.sendTime"
+                />
+              </UFormField>
+            </section>
+
             <div class="flex justify-end">
               <UButton
                 label="保存"
@@ -110,9 +197,21 @@
 </template>
 
 <script setup lang="ts">
-import type { GeneralSettings } from '@zakobot/shared'
+import type { GeneralSettings, ToolApprovalMode, ToolProcessMode } from '@zakobot/shared'
 
-type GeneralSection = 'agent' | 'discord'
+type GeneralSection = 'agent' | 'discord' | 'time'
+
+const toolApprovalOptions: Array<{ label: string; value: ToolApprovalMode; description: string }> = [
+  { label: '始终确认', value: 'all', description: '所有工具调用都需要用户点击允许后才会执行。' },
+  { label: '仅敏感工具', value: 'sensitive', description: '仅对标记为敏感的工具（如执行命令、写入文件）弹出确认。' },
+  { label: '无需确认', value: 'none', description: '所有工具调用自动执行，不弹出任何确认。' },
+]
+
+const toolProcessOptions: Array<{ label: string; value: ToolProcessMode; description: string }> = [
+  { label: '不展示', value: 'none', description: 'AI 静默调用工具，只发送最终回答。' },
+  { label: '只展示工具名', value: 'tools_only', description: '调用工具时发送简短通知，不显示参数和结果详情。' },
+  { label: '全部展示', value: 'full', description: '展示工具名、调用参数和执行结果。' },
+]
 
 const toast = useToast()
 
@@ -134,6 +233,12 @@ const sections: Array<{
     icon: 'i-heroicons-chat-bubble-left-ellipsis-20-solid',
     description: '配置 Discord 消息触发规则。',
   },
+  {
+    label: '时间',
+    value: 'time',
+    icon: 'i-heroicons-clock-20-solid',
+    description: '配置发送时间与时区。',
+  },
 ]
 
 const { data, pending, error, refresh } = await useFetch<{ ok: true, data: GeneralSettings }>('/api/settings/general')
@@ -147,6 +252,10 @@ const form = reactive<GeneralSettings>({
   maxToolCallRounds: 8,
   requireMention: true,
   threadMode: false,
+  sendTime: false,
+  timezone: 'UTC',
+  toolApprovalMode: 'all',
+  toolProcessMode: 'full',
 })
 const saving = ref(false)
 
@@ -157,6 +266,10 @@ watch(
     form.maxToolCallRounds = settings.maxToolCallRounds
     form.requireMention = settings.requireMention
     form.threadMode = settings.threadMode
+    form.sendTime = settings.sendTime
+    form.timezone = settings.timezone
+    form.toolApprovalMode = settings.toolApprovalMode
+    form.toolProcessMode = settings.toolProcessMode
   },
   { immediate: true },
 )
@@ -179,6 +292,10 @@ async function handleSave() {
         maxToolCallRounds: Number(form.maxToolCallRounds),
         requireMention: form.requireMention,
         threadMode: form.threadMode,
+        sendTime: form.sendTime,
+        timezone: form.timezone,
+        toolApprovalMode: form.toolApprovalMode,
+        toolProcessMode: form.toolProcessMode,
       },
     })
 

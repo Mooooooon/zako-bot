@@ -110,30 +110,41 @@
       <UFormField
         label="工具权限"
         name="enabledTools"
-        description="允许模型在需要时调用外部能力。"
+        description="允许模型在需要时调用外部能力。标记「敏感」的工具建议在通用设置中开启工具调用安全确认。"
       >
-        <div class="space-y-3">
-          <label
-            v-for="tool in availableTools"
-            :key="tool.value"
-            class="flex items-start gap-3"
-          >
-            <input
-              v-model="state.enabledTools"
-              class="mt-1 size-4 accent-[var(--ui-primary)]"
-              type="checkbox"
-              :value="tool.value"
-              :disabled="pending"
-            >
-            <span class="min-w-0">
-              <span class="block text-sm font-medium text-[var(--text-primary)]">
-                {{ tool.label }}
-              </span>
-              <span class="block text-sm text-[var(--text-secondary)]">
-                {{ tool.description }}
-              </span>
-            </span>
-          </label>
+        <div class="space-y-5">
+          <div v-for="group in toolGroups" :key="group.label">
+            <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+              {{ group.label }}
+            </p>
+            <div class="space-y-3">
+              <label
+                v-for="tool in group.tools"
+                :key="tool.value"
+                class="flex items-start gap-3"
+              >
+                <input
+                  v-model="state.enabledTools"
+                  class="mt-1 size-4 accent-[var(--ui-primary)]"
+                  type="checkbox"
+                  :value="tool.value"
+                  :disabled="pending"
+                >
+                <span class="min-w-0">
+                  <span class="flex items-center gap-1.5 text-sm font-medium text-[var(--text-primary)]">
+                    {{ tool.label }}
+                    <span
+                      v-if="tool.sensitive"
+                      class="rounded bg-orange-100 px-1 py-0.5 text-[10px] font-semibold uppercase text-orange-700 dark:bg-orange-900/40 dark:text-orange-400"
+                    >敏感</span>
+                  </span>
+                  <span class="block text-sm text-[var(--text-secondary)]">
+                    {{ tool.description }}
+                  </span>
+                </span>
+              </label>
+            </div>
+          </div>
         </div>
       </UFormField>
 
@@ -183,20 +194,28 @@ const state = reactive<RoleEditorInput>({
   enabledTools: [],
 })
 
-const availableTools: Array<{
-  value: BuiltinTool
+interface ToolGroup {
   label: string
-  description: string
-}> = [
+  tools: Array<{ value: BuiltinTool; label: string; description: string; sensitive?: boolean }>
+}
+
+const toolGroups: ToolGroup[] = [
   {
-    value: 'web_search',
-    label: '网页搜索',
-    description: '通过搜索引擎获取公开网页结果。',
+    label: '网络',
+    tools: [
+      { value: 'web_search', label: '网页搜索', description: '通过搜索引擎获取公开网页结果。' },
+      { value: 'web_browse', label: '网页浏览', description: '读取公开网页正文，用于摘要和引用。' },
+    ],
   },
   {
-    value: 'web_browse',
-    label: '网页浏览',
-    description: '读取公开网页正文，用于摘要和引用。',
+    label: '系统（敏感）',
+    tools: [
+      { value: 'shell_exec', label: 'Shell 执行', description: '在服务器上执行 Shell 命令，返回 stdout/stderr/退出码。', sensitive: true },
+      { value: 'file_read', label: '文件读取', description: '读取文件内容，附带行号，支持分页。' },
+      { value: 'file_write', label: '文件写入', description: '创建或覆盖写入文件，父目录不存在时自动创建。', sensitive: true },
+      { value: 'file_edit', label: '文件编辑', description: '精确字符串替换，要求目标字符串在文件中唯一出现。', sensitive: true },
+      { value: 'file_list', label: '目录列表', description: '列出目录中的文件和子目录，支持递归。' },
+    ],
   },
 ]
 
