@@ -1,6 +1,6 @@
 {
   "name": "zakobot",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Modular LLM bot framework with Discord support and a web management panel",
   "keywords": ["bot", "discord", "llm", "ai", "chatbot"],
   "license": "MIT",

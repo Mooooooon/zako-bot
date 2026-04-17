@@ -1,6 +1,6 @@
 {
   "name": "@zakobot/database",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "ZakoBot database schema and queries (Drizzle ORM + SQLite)",
   "license": "MIT",
   "repository": {
