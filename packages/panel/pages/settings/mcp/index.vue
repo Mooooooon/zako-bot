@@ -1,245 +1,337 @@
 <template>
-  <div class="mx-auto flex max-w-6xl flex-col gap-6">
-        <header class="flex flex-wrap items-start justify-between gap-3">
-          <div class="space-y-1">
-            <h1 class="m-0 text-2xl font-bold text-[var(--text-primary)]">
-              MCP
-            </h1>
-            <p class="m-0 text-sm text-[var(--text-secondary)]">
-              管理外部工具服务器连接。
-            </p>
-          </div>
-
-          <div class="flex flex-wrap gap-2">
-            <UButton
-              label="刷新"
-              color="neutral"
-              variant="outline"
-              :loading="pending"
-              @click="refresh"
-            />
-            <UButton
-              label="新增服务器"
-              icon="i-heroicons-plus-20-solid"
-              @click="openCreate"
-            />
-          </div>
-        </header>
-
-    <UAlert
-      v-if="error"
-      color="error"
-      variant="subtle"
-      icon="i-heroicons-x-circle-20-solid"
-      title="MCP 加载失败"
-      :description="error"
-    />
-
-    <UAlert
-      v-if="deleteTarget"
-      color="error"
-      variant="subtle"
-      icon="i-heroicons-exclamation-triangle-20-solid"
-      title="确认删除 MCP 服务器"
-      :description="`服务器「${deleteTarget.name}」删除后，已注册工具会立即移除。`"
-      :actions="deleteConfirmActions"
-      orientation="horizontal"
-    />
-
-    <UCard variant="subtle">
-      <div v-if="pending && !servers.length" class="space-y-3">
-        <USkeleton class="h-12 w-full" />
-        <USkeleton class="h-12 w-full" />
-        <USkeleton class="h-12 w-full" />
-      </div>
-
-      <UTable
-        v-else-if="serverRows.length"
-        :data="serverRows"
-        :columns="columns"
-      />
-
-      <div v-else class="flex flex-col items-center gap-4 py-10">
-        <UEmpty
-          icon="i-heroicons-server-stack-20-solid"
-          title="暂无 MCP 服务器"
-          description="添加服务器后，角色可以启用它提供的工具。"
-        />
-        <UButton
-          label="添加第一个服务器"
-          icon="i-heroicons-plus-20-solid"
-          @click="openCreate"
-        />
-      </div>
-    </UCard>
-
-    <section class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-      <UCard
-        v-for="item in status"
-        :key="item.id"
-        variant="subtle"
-      >
-        <div class="space-y-3">
+  <div class="flex h-full gap-6">
+    <aside class="w-72 shrink-0">
+      <UCard variant="subtle" class="flex h-full flex-col">
+        <template #header>
           <div class="flex items-center justify-between gap-3">
-            <div class="min-w-0">
-              <h2 class="m-0 truncate text-sm font-semibold text-[var(--text-primary)]">
-                {{ item.name }}
+            <div>
+              <h2 class="m-0 text-sm font-semibold text-[var(--text-primary)]">
+                MCP
               </h2>
-              <p class="m-0 text-xs text-[var(--text-secondary)]">
-                {{ item.connected ? '已连接' : '未连接' }}
+              <p class="mt-1 text-xs text-[var(--text-secondary)]">
+                管理外部工具服务器
               </p>
             </div>
-            <UBadge
-              :label="`${item.toolCount} 个工具`"
-              :color="item.connected ? 'success' : 'neutral'"
-              variant="subtle"
-            />
+
+            <div class="flex items-center gap-1">
+              <UButton
+                icon="i-heroicons-arrow-path-20-solid"
+                size="xs"
+                variant="ghost"
+                color="neutral"
+                aria-label="刷新"
+                :loading="pending"
+                @click="refresh"
+              />
+              <UButton
+                icon="i-heroicons-plus-20-solid"
+                size="xs"
+                variant="ghost"
+                color="neutral"
+                aria-label="新增服务器"
+                @click="openCreate"
+              />
+            </div>
+          </div>
+        </template>
+
+        <div class="flex min-h-0 flex-1 flex-col gap-2">
+          <div v-if="pending && !serverRows.length" class="space-y-2">
+            <USkeleton class="h-14 w-full" />
+            <USkeleton class="h-14 w-full" />
+            <USkeleton class="h-14 w-full" />
           </div>
 
-          <UAlert
-            v-if="item.error"
-            color="error"
-            variant="subtle"
-            :description="item.error"
-          />
-
-          <div v-if="item.toolNames.length" class="flex flex-wrap gap-1.5">
-            <UBadge
-              v-for="toolName in item.toolNames"
-              :key="toolName"
-              :label="toolName"
+          <div v-else-if="serverRows.length" class="min-h-0 flex-1 space-y-1 overflow-y-auto">
+            <UButton
+              v-for="item in serverRows"
+              :key="item.id"
               color="neutral"
-              variant="outline"
-              class="font-mono"
-            />
+              :variant="!isCreating && selectedId === item.id ? 'soft' : 'ghost'"
+              class="w-full justify-start px-3 py-2"
+              :ui="{
+                base: 'group',
+                leadingIcon: 'hidden',
+                trailingIcon: 'hidden',
+                label: 'flex-1 min-w-0'
+              }"
+              @click="selectServer(item.id)"
+            >
+              <span class="flex min-w-0 flex-1 items-start gap-2">
+                <span
+                  class="mt-1.5 size-2.5 shrink-0 rounded-full"
+                  :class="item.connected ? 'bg-green-500' : 'bg-red-500'"
+                />
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-sm font-medium">{{ item.name }}</span>
+                </span>
+              </span>
+
+              <template #trailing>
+                <div class="flex items-center gap-2">
+                  <UBadge
+                    :label="String(item.toolCount)"
+                    :color="item.connected ? 'success' : 'neutral'"
+                    variant="subtle"
+                  />
+                  <USwitch
+                    :model-value="item.enabled"
+                    size="xs"
+                    :disabled="Boolean(operatingId)"
+                    @click.stop
+                    @update:model-value="handleListEnabledChange(item, $event)"
+                  />
+                </div>
+              </template>
+            </UButton>
           </div>
+
+          <UEmpty
+            v-else
+            icon="i-heroicons-server-stack-20-solid"
+            title="暂无 MCP 服务器"
+            description="点击右上角添加服务器。"
+          />
         </div>
       </UCard>
-    </section>
+    </aside>
 
-    <UModal v-model:open="showEditor" :title="editingId ? '编辑 MCP 服务器' : '新增 MCP 服务器'">
-      <template #body>
-        <div class="space-y-4">
-          <UFormField
-            label="名称"
-            name="name"
-            description="用于工具名前缀，只允许字母、数字、下划线和连字符。"
-            required
-          >
-            <UInput
-              v-model="form.name"
-              class="w-full"
-              placeholder="filesystem"
-              :disabled="saving"
-            />
-          </UFormField>
+    <div class="min-w-0 flex-1 overflow-y-auto">
+      <div class="flex flex-col gap-4">
+        <UAlert
+          v-if="error"
+          color="error"
+          variant="subtle"
+          icon="i-heroicons-x-circle-20-solid"
+          title="MCP 加载失败"
+          :description="error"
+        />
 
-          <UFormField label="描述" name="description">
-            <UInput
-              v-model="form.description"
-              class="w-full"
-              placeholder="本地文件工具"
-              :disabled="saving"
-            />
-          </UFormField>
+        <UAlert
+          v-if="deleteTarget"
+          color="error"
+          variant="subtle"
+          icon="i-heroicons-exclamation-triangle-20-solid"
+          title="确认删除 MCP 服务器"
+          :description="`服务器「${deleteTarget.name}」删除后，已注册工具会立即移除。`"
+          :actions="deleteConfirmActions"
+          orientation="horizontal"
+        />
 
-          <UFormField label="连接类型" name="transport" required>
-            <USelect
-              v-model="form.transport"
-              class="w-full"
-              :items="transportOptions"
-              :disabled="saving"
-            />
-          </UFormField>
+        <UCard v-if="isCreating || selectedServer" variant="subtle">
+          <template #header>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="min-w-0">
+                <div class="flex min-w-0 flex-wrap items-center gap-2">
+                  <h3 class="m-0 truncate text-xl font-bold text-[var(--text-primary)]">
+                    {{ isCreating ? '新增 MCP 服务器' : selectedServer?.name }}
+                  </h3>
+                  <UBadge
+                    :label="form.transport"
+                    color="neutral"
+                    variant="subtle"
+                  />
+                  <UBadge
+                    v-if="selectedStatus"
+                    :label="selectedStatus.connected ? '已连接' : '未连接'"
+                    :color="selectedStatus.connected ? 'success' : 'error'"
+                    variant="subtle"
+                  />
+                </div>
+                <p v-if="!isCreating && selectedServer" class="mt-1 truncate text-xs text-[var(--text-secondary)]">
+                  {{ getServerSummary(selectedServer) }}
+                </p>
+              </div>
 
-          <template v-if="form.transport === 'stdio'">
-            <UFormField label="命令" name="command" required>
-              <UInput
-                v-model="form.command"
-                class="w-full font-mono"
-                placeholder="npx"
-                :disabled="saving"
-              />
-            </UFormField>
-
-            <UFormField
-              label="参数"
-              name="args"
-              description="每行一个参数。"
-            >
-              <UTextarea
-                v-model="argsText"
-                class="w-full font-mono"
-                :rows="5"
-                placeholder="-y&#10;@modelcontextprotocol/server-filesystem&#10;/home/user"
-                :disabled="saving"
-              />
-            </UFormField>
-
-            <UFormField
-              label="环境变量"
-              name="env"
-              description="JSON 对象，例如 { &quot;TOKEN&quot;: &quot;xxx&quot; }。"
-            >
-              <UTextarea
-                v-model="envText"
-                class="w-full font-mono"
-                :rows="5"
-                placeholder="{ }"
-                :disabled="saving"
-              />
-            </UFormField>
+              <div class="flex flex-wrap items-center gap-2">
+                <UButton
+                  v-if="!isCreating && selectedServer"
+                  :label="operatingId === selectedServer.id ? '重连中' : '重连'"
+                  color="neutral"
+                  variant="outline"
+                  :loading="operatingId === selectedServer.id"
+                  :disabled="Boolean(operatingId) || !selectedServer.enabled"
+                  @click="handleReconnect(selectedServer)"
+                />
+                <UButton
+                  v-if="!isCreating && selectedServer"
+                  label="删除"
+                  color="error"
+                  variant="outline"
+                  :disabled="Boolean(operatingId)"
+                  @click="deleteTarget = selectedServer"
+                />
+              </div>
+            </div>
           </template>
 
-          <UFormField
-            v-else
-            label="SSE URL"
-            name="url"
-            required
-          >
-            <UInput
-              v-model="form.url"
-              class="w-full font-mono"
-              placeholder="http://localhost:3001/sse"
-              :disabled="saving"
+          <div class="flex max-w-xl flex-col gap-4">
+            <UAlert
+              v-if="selectedStatus?.error"
+              color="error"
+              variant="subtle"
+              title="连接异常"
+              :description="selectedStatus.error"
             />
-          </UFormField>
 
-          <UFormField label="启用" name="enabled">
-            <div class="flex h-10 items-center">
-              <USwitch v-model="form.enabled" :disabled="saving" />
+            <UFormField
+              label="名称"
+              name="name"
+              description="用于工具名前缀，只允许字母、数字、下划线和连字符。"
+              required
+            >
+              <UInput
+                v-model="form.name"
+                class="w-full"
+                placeholder="filesystem"
+                :disabled="saving"
+              />
+            </UFormField>
+
+            <UFormField label="描述" name="description">
+              <UInput
+                v-model="form.description"
+                class="w-full"
+                placeholder="本地文件工具"
+                :disabled="saving"
+              />
+            </UFormField>
+
+            <UFormField label="连接类型" name="transport" required>
+              <USelect
+                v-model="form.transport"
+                class="w-full"
+                :items="transportOptions"
+                :disabled="saving"
+              />
+            </UFormField>
+
+            <template v-if="form.transport === 'stdio'">
+              <UFormField label="命令" name="command" required>
+                <UInput
+                  v-model="form.command"
+                  class="w-full font-mono"
+                  placeholder="npx"
+                  :disabled="saving"
+                />
+              </UFormField>
+
+              <UFormField
+                label="参数"
+                name="args"
+                description="每行一个参数。"
+              >
+                <UTextarea
+                  v-model="argsText"
+                  class="w-full font-mono"
+                  :rows="5"
+                  placeholder="-y&#10;@modelcontextprotocol/server-filesystem&#10;/home/user"
+                  :disabled="saving"
+                />
+              </UFormField>
+
+              <UFormField
+                label="环境变量"
+                name="env"
+                description="JSON 对象，例如 { &quot;TOKEN&quot;: &quot;xxx&quot; }。"
+              >
+                <UTextarea
+                  v-model="envText"
+                  class="w-full font-mono"
+                  :rows="5"
+                  placeholder="{ }"
+                  :disabled="saving"
+                />
+              </UFormField>
+            </template>
+
+            <UFormField
+              v-else
+              label="SSE URL"
+              name="url"
+              required
+            >
+              <UInput
+                v-model="form.url"
+                class="w-full font-mono"
+                placeholder="http://localhost:3001/sse"
+                :disabled="saving"
+              />
+            </UFormField>
+
+            <UFormField label="启用" name="enabled">
+              <div class="flex h-10 items-center">
+                <USwitch v-model="form.enabled" :disabled="saving" />
+              </div>
+            </UFormField>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <UButton
+                label="保存"
+                :loading="saving"
+                :disabled="!canSave"
+                @click="handleSave"
+              />
+              <UButton
+                v-if="isCreating"
+                label="取消"
+                color="neutral"
+                variant="outline"
+                :disabled="saving"
+                @click="cancelCreate"
+              />
             </div>
-          </UFormField>
-        </div>
-      </template>
 
-      <template #footer>
-        <div class="flex w-full justify-end gap-2">
-          <UButton
-            label="取消"
-            color="neutral"
-            variant="outline"
-            :disabled="saving"
-            @click="showEditor = false"
-          />
-          <UButton
-            label="保存"
-            :loading="saving"
-            :disabled="!canSave"
-            @click="handleSave"
+            <div v-if="!isCreating" class="flex flex-col gap-2 border-t border-[var(--ui-border)] pt-4">
+              <div class="flex items-center gap-2">
+                <h4 class="m-0 text-sm font-semibold text-[var(--text-primary)]">
+                  工具列表
+                </h4>
+                <UBadge
+                  :label="String(selectedStatus?.toolCount ?? 0)"
+                  color="primary"
+                  variant="subtle"
+                  size="lg"
+                />
+              </div>
+
+              <div v-if="selectedStatus?.toolNames.length" class="flex flex-wrap gap-1.5">
+                <UBadge
+                  v-for="toolName in selectedStatus.toolNames"
+                  :key="toolName"
+                  :label="toolName"
+                  color="neutral"
+                  variant="outline"
+                  class="font-mono"
+                />
+              </div>
+
+              <UEmpty
+                v-else
+                icon="i-heroicons-wrench-screwdriver-20-solid"
+                title="暂无工具"
+                description="服务器连接成功后会在这里显示工具。"
+              />
+            </div>
+          </div>
+        </UCard>
+
+        <div v-else class="flex h-full items-center justify-center py-16">
+          <UEmpty
+            icon="i-heroicons-server-stack-20-solid"
+            title="选择一个 MCP 服务器"
+            description="从左侧选择一个服务器查看和编辑配置。"
           />
         </div>
-      </template>
-    </UModal>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { h, resolveComponent } from 'vue'
-import type { TableColumn } from '@nuxt/ui'
 import type { McpServerEditorInput, McpServerProfile, McpTransport } from '@zakobot/shared'
 
-type McpServerRow = McpServerProfile & {
+type McpServerListItem = McpServerProfile & {
   connected: boolean
   toolCount: number
   error?: string
@@ -258,12 +350,8 @@ const {
   reconnect,
 } = useMcpServers()
 
-const UBadge = resolveComponent('UBadge')
-const UButton = resolveComponent('UButton')
-const USwitch = resolveComponent('USwitch')
-
-const showEditor = ref(false)
-const editingId = ref('')
+const selectedId = ref<string | null>(null)
+const isCreating = ref(false)
 const saving = ref(false)
 const operatingId = ref('')
 const deleteTarget = ref<McpServerProfile | null>(null)
@@ -280,89 +368,20 @@ const statusById = computed(() =>
   new Map(status.value.map(item => [item.id, item] as const)),
 )
 
-const serverRows = computed<McpServerRow[]>(() => servers.value.map(server => ({
+const selectedServer = computed(() =>
+  selectedId.value ? servers.value.find(server => server.id === selectedId.value) ?? null : null,
+)
+
+const selectedStatus = computed(() =>
+  selectedServer.value ? statusById.value.get(selectedServer.value.id) ?? null : null,
+)
+
+const serverRows = computed<McpServerListItem[]>(() => servers.value.map(server => ({
   ...server,
   connected: statusById.value.get(server.id)?.connected ?? false,
   toolCount: statusById.value.get(server.id)?.toolCount ?? 0,
   error: statusById.value.get(server.id)?.error,
 })))
-
-const columns: TableColumn<McpServerRow>[] = [
-  {
-    accessorKey: 'name',
-    header: '服务器',
-    cell: ({ row }) =>
-      h('div', { class: 'flex min-w-0 items-start gap-3' }, [
-        h('span', {
-          class: [
-            'mt-1.5 size-2.5 shrink-0 rounded-full',
-            row.original.connected ? 'bg-green-500' : 'bg-red-500',
-          ].join(' '),
-        }),
-        h('div', { class: 'min-w-0' }, [
-          h('div', { class: 'truncate font-semibold text-[var(--text-primary)]' }, row.original.name),
-          h('div', { class: 'truncate text-xs text-[var(--text-secondary)]' }, row.original.description || row.original.url || row.original.command),
-          row.original.error
-            ? h('div', { class: 'mt-1 max-w-[24rem] truncate text-xs text-red-500' }, row.original.error)
-            : null,
-        ]),
-      ]),
-  },
-  {
-    accessorKey: 'transport',
-    header: '类型',
-    cell: ({ row }) =>
-      h(UBadge, {
-        label: row.original.transport,
-        color: 'neutral',
-        variant: 'subtle',
-      }),
-  },
-  {
-    accessorKey: 'toolCount',
-    header: '工具',
-    cell: ({ row }) => `${row.original.toolCount}`,
-  },
-  {
-    accessorKey: 'enabled',
-    header: '启用',
-    cell: ({ row }) =>
-      h(USwitch, {
-        modelValue: row.original.enabled,
-        disabled: Boolean(operatingId.value),
-        'onUpdate:modelValue': (value: boolean) => toggleEnabled(row.original, value),
-      }),
-  },
-  {
-    id: 'actions',
-    header: '',
-    cell: ({ row }) =>
-      h('div', { class: 'flex flex-wrap justify-end gap-2' }, [
-        h(UButton, {
-          label: '编辑',
-          color: 'neutral',
-          variant: 'outline',
-          disabled: Boolean(operatingId.value),
-          onClick: () => openEdit(row.original),
-        }),
-        h(UButton, {
-          label: operatingId.value === row.original.id ? '重连中' : '重连',
-          color: 'neutral',
-          variant: 'outline',
-          loading: operatingId.value === row.original.id,
-          disabled: Boolean(operatingId.value) || !row.original.enabled,
-          onClick: () => handleReconnect(row.original),
-        }),
-        h(UButton, {
-          label: '删除',
-          color: 'error',
-          variant: 'outline',
-          disabled: Boolean(operatingId.value),
-          onClick: () => { deleteTarget.value = row.original },
-        }),
-      ]),
-  },
-]
 
 const deleteConfirmActions = computed(() => [
   {
@@ -401,6 +420,32 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (refreshTimer) clearInterval(refreshTimer)
+})
+
+watch(servers, (items) => {
+  if (isCreating.value) return
+
+  if (!items.length) {
+    selectedId.value = null
+    return
+  }
+
+  if (!selectedId.value || !items.some(item => item.id === selectedId.value)) {
+    selectedId.value = items[0]?.id ?? null
+  }
+}, { immediate: true })
+
+watch(selectedId, () => {
+  if (!isCreating.value) syncFormFromSelection()
+})
+
+watch(isCreating, (creating) => {
+  if (creating) {
+    setForm(createEmptyForm())
+    return
+  }
+
+  syncFormFromSelection()
 })
 
 function createEmptyForm(): McpServerEditorInput {
@@ -442,16 +487,40 @@ function setForm(value: McpServerEditorInput) {
   envText.value = JSON.stringify(value.env, null, 2)
 }
 
-function openCreate() {
-  editingId.value = ''
+function syncFormFromSelection() {
+  if (selectedServer.value) {
+    setForm(toEditorInput(selectedServer.value))
+    return
+  }
+
   setForm(createEmptyForm())
-  showEditor.value = true
 }
 
-function openEdit(server: McpServerProfile) {
-  editingId.value = server.id
-  setForm(toEditorInput(server))
-  showEditor.value = true
+function selectServer(id: string) {
+  isCreating.value = false
+  selectedId.value = id
+  deleteTarget.value = null
+}
+
+function openCreate() {
+  selectedId.value = null
+  isCreating.value = true
+  deleteTarget.value = null
+}
+
+function cancelCreate() {
+  isCreating.value = false
+  selectedId.value = servers.value[0]?.id ?? null
+}
+
+function getServerSummary(server: Pick<McpServerProfile, 'description' | 'transport' | 'command' | 'url'>) {
+  if (server.description) return server.description
+  if (server.transport === 'stdio') return server.command || 'stdio'
+  return server.url || 'sse'
+}
+
+function handleListEnabledChange(server: McpServerProfile, value: boolean | 'indeterminate') {
+  void toggleEnabled(server, value === true)
 }
 
 function buildPayload(): McpServerEditorInput | null {
@@ -494,12 +563,18 @@ async function handleSave() {
   saving.value = true
 
   try {
-    const saved = editingId.value
-      ? await update(editingId.value, payload)
-      : await create(payload)
+    const saved = isCreating.value
+      ? await create(payload)
+      : selectedId.value
+        ? await update(selectedId.value, payload)
+        : null
 
+    if (!saved) return
+
+    selectedId.value = saved.id
+    isCreating.value = false
+    setForm(toEditorInput(saved))
     toast.add({ title: `已保存 MCP 服务器「${saved.name}」`, color: 'success' })
-    showEditor.value = false
   }
   catch (err: any) {
     toast.add({
@@ -519,6 +594,11 @@ async function toggleEnabled(server: McpServerProfile, enabled: boolean) {
     const payload = toEditorInput(server)
     payload.enabled = enabled
     await update(server.id, payload)
+
+    if (server.id === selectedId.value && !isCreating.value) {
+      form.enabled = enabled
+    }
+
     toast.add({ title: enabled ? `已启用「${server.name}」` : `已关闭「${server.name}」`, color: 'success' })
   }
   catch (err: any) {
@@ -561,6 +641,10 @@ async function handleDelete() {
     await remove(target.id)
     toast.add({ title: `已删除「${target.name}」`, color: 'success' })
     deleteTarget.value = null
+    if (selectedId.value === target.id) {
+      selectedId.value = servers.value[0]?.id ?? null
+      isCreating.value = false
+    }
   }
   catch (err: any) {
     toast.add({
