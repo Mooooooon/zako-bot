@@ -1,7 +1,4 @@
 import 'dotenv/config'
-import { resolve } from 'path'
-import { homedir } from 'os'
-import { mkdirSync } from 'fs'
 import { createDb, listEnabledMcpServers } from '@zakobot/database'
 import { BotManager } from './bot/bot-manager.js'
 import { PluginLoader } from './plugins/loader.js'
@@ -12,11 +9,12 @@ import { createDefaultToolRegistry } from './tools/index.js'
 import { getSearchSettings } from './settings/search-settings.js'
 import { getBrowseSettings } from './settings/browse-settings.js'
 import { getGeneralSettings } from './settings/general-settings.js'
+import { ensureDirectory, getMcpWorkdir, getZakobotHome, resolveZakobotPath } from './runtime/paths.js'
 
-const zakobotHome = process.env.ZAKOBOT_HOME ?? resolve(homedir(), '.zakobot')
-mkdirSync(zakobotHome, { recursive: true })
+const zakobotHome = ensureDirectory(getZakobotHome())
+const mcpWorkdir = ensureDirectory(getMcpWorkdir(zakobotHome))
 
-const dbUrl = process.env.DATABASE_URL ?? resolve(zakobotHome, 'data.db')
+const dbUrl = process.env.DATABASE_URL ?? resolveZakobotPath(zakobotHome, 'data.db')
 const db = createDb(dbUrl)
 
 let shuttingDown = false
@@ -28,7 +26,7 @@ async function main() {
     () => getSearchSettings(db),
     () => getBrowseSettings(db),
   )
-  const mcpManager = new McpManager(toolRegistry)
+  const mcpManager = new McpManager(toolRegistry, { stdioCwd: mcpWorkdir })
   const botManager = new BotManager(db, toolRegistry, () => getGeneralSettings(db))
   const pluginLoader = new PluginLoader(botManager, toolRegistry)
   const apiServer = new ApiServer(db, botManager, pluginLoader, mcpManager)

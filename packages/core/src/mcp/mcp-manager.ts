@@ -11,11 +11,18 @@ interface McpConnection {
   toolNames: string[]
 }
 
+interface McpManagerOptions {
+  stdioCwd?: string
+}
+
 export class McpManager {
   private connections = new Map<string, McpConnection>()
   private errors = new Map<string, string>()
 
-  constructor(private toolRegistry: ToolRegistry) {}
+  constructor(
+    private toolRegistry: ToolRegistry,
+    private options: McpManagerOptions = {},
+  ) {}
 
   async connect(serverRow: McpServerRow): Promise<void> {
     if (this.connections.has(serverRow.id)) {
@@ -152,6 +159,7 @@ export class McpManager {
       return new StdioClientTransport({
         command: serverRow.command,
         args: this.parseStringArray(serverRow.args),
+        cwd: this.options.stdioCwd,
         env: {
           ...this.getProcessEnv(),
           ...this.parseStringRecord(serverRow.env),
