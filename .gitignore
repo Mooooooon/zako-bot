@@ -7,6 +7,7 @@ dist/
 *.log
 .DS_Store
 .claude
+.playwright-mcp/
 *.db
 *.db-shm
 *.db-wal
