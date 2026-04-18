@@ -1,5 +1,6 @@
 export * from './app-settings.js'
 export * from './bot-instances.js'
 export * from './conversations.js'
+export * from './mcp-servers.js'
 export * from './roles.js'
 export * from './seed.js'

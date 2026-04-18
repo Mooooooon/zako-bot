@@ -161,7 +161,7 @@ const footerItems = computed<NavigationMenuItem[]>(() => [
   {
     label: '设置',
     icon: 'i-heroicons-cog-6-tooth-20-solid',
-    to: '/settings',
+    to: '/settings/general',
     active: route.path.startsWith('/settings'),
   },
 ])

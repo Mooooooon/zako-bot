@@ -112,37 +112,73 @@
         name="enabledTools"
         description="允许模型在需要时调用外部能力。标记「敏感」的工具建议在通用设置中开启工具调用安全确认。"
       >
-        <div class="space-y-5">
-          <div v-for="group in toolGroups" :key="group.label">
-            <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
-              {{ group.label }}
-            </p>
-            <div class="space-y-3">
-              <label
-                v-for="tool in group.tools"
-                :key="tool.value"
-                class="flex items-start gap-3"
-              >
-                <input
-                  v-model="state.enabledTools"
-                  class="mt-1 size-4 accent-[var(--ui-primary)]"
-                  type="checkbox"
-                  :value="tool.value"
-                  :disabled="pending"
-                >
-                <span class="min-w-0">
-                  <span class="flex items-center gap-1.5 text-sm font-medium text-[var(--text-primary)]">
-                    {{ tool.label }}
-                    <span
-                      v-if="tool.sensitive"
-                      class="rounded bg-orange-100 px-1 py-0.5 text-[10px] font-semibold uppercase text-orange-700 dark:bg-orange-900/40 dark:text-orange-400"
-                    >敏感</span>
-                  </span>
-                  <span class="block text-sm text-[var(--text-secondary)]">
-                    {{ tool.description }}
-                  </span>
-                </span>
-              </label>
+        <div class="space-y-3">
+          <ToolPermissionGroup
+            v-for="group in toolGroups"
+            :key="group.label"
+            v-model="state.enabledTools"
+            :title="group.label"
+            :description="group.description"
+            :items="group.tools"
+            :disabled="pending"
+          />
+
+          <div>
+            <div class="mb-2 flex items-center justify-between gap-3 pt-2">
+              <p class="m-0 text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+                MCP 工具
+              </p>
+              <UButton
+                label="刷新"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                :loading="mcpStatusPending"
+                :disabled="pending"
+                @click="refreshMcpStatus"
+              />
+            </div>
+
+            <div v-if="mcpStatusPending && !mcpServers.length" class="space-y-2">
+              <USkeleton class="h-10 w-full" />
+              <USkeleton class="h-10 w-full" />
+            </div>
+
+            <div v-else-if="mcpToolGroups.length" class="space-y-3">
+              <ToolPermissionGroup
+                v-for="group in mcpToolGroups"
+                :key="group.id"
+                v-model="state.enabledTools"
+                :title="group.title"
+                :description="group.description"
+                :note="group.note"
+                :error="group.error"
+                :items="group.items"
+                :disabled="pending"
+              />
+            </div>
+
+            <UEmpty
+              v-else
+              icon="i-heroicons-server-stack-20-solid"
+              title="暂无 MCP 工具"
+              description="在 MCP 设置中添加并连接服务器后，可在这里启用工具。"
+            />
+
+            <div v-if="unknownMcpToolGroups.length" class="mt-3 space-y-3">
+              <p class="m-0 text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+                已保存但未加载
+              </p>
+              <ToolPermissionGroup
+                v-for="group in unknownMcpToolGroups"
+                :key="group.id"
+                v-model="state.enabledTools"
+                :title="group.title"
+                description="已保存但当前未加载"
+                note="取消勾选后保存，可从角色配置中移除这些工具。"
+                :items="group.items"
+                :disabled="pending"
+              />
             </div>
           </div>
         </div>
@@ -173,7 +209,7 @@
 </template>
 
 <script setup lang="ts">
-import type { BuiltinTool, RoleEditorInput } from '@zakobot/shared'
+import type { McpServerStatus, RoleEditorInput } from '@zakobot/shared'
 
 const props = defineProps<{
   title: string
@@ -194,21 +230,33 @@ const state = reactive<RoleEditorInput>({
   enabledTools: [],
 })
 
+interface ToolPermissionItem {
+  value: string
+  label: string
+  description?: string
+  detail?: string
+  sensitive?: boolean
+  disabled?: boolean
+}
+
 interface ToolGroup {
   label: string
-  tools: Array<{ value: BuiltinTool; label: string; description: string; sensitive?: boolean }>
+  description: string
+  tools: ToolPermissionItem[]
 }
 
 const toolGroups: ToolGroup[] = [
   {
     label: '网络',
+    description: '公开网页搜索与浏览',
     tools: [
       { value: 'web_search', label: '网页搜索', description: '通过搜索引擎获取公开网页结果。' },
       { value: 'web_browse', label: '网页浏览', description: '读取公开网页正文，用于摘要和引用。' },
     ],
   },
   {
-    label: '系统（敏感）',
+    label: '系统',
+    description: '服务器命令与文件能力',
     tools: [
       { value: 'shell_exec', label: 'Shell 执行', description: '在服务器上执行 Shell 命令，返回 stdout/stderr/退出码。', sensitive: true },
       { value: 'file_read', label: '文件读取', description: '读取文件内容，附带行号，支持分页。' },
@@ -222,6 +270,7 @@ const toolGroups: ToolGroup[] = [
 const avatarUploadFile = ref<File | null>(null)
 const avatarUploadPending = ref(false)
 const avatarUploadError = ref('')
+const { data: mcpStatusData, pending: mcpStatusPending, refresh: refreshMcpStatusRaw } = useFetch<{ ok: true; data: McpServerStatus[] }>('/api/mcp/status')
 
 const squareAvatarUi = {
   root: 'rounded-md overflow-hidden bg-default',
@@ -260,6 +309,56 @@ const canSubmit = computed(() =>
   && state.systemPrompt.trim().length > 0,
 )
 
+const mcpServers = computed(() => mcpStatusData.value?.data ?? [])
+const loadedMcpTools = computed(() => new Set(mcpServers.value.flatMap(server => server.toolNames)))
+const unknownMcpTools = computed(() =>
+  state.enabledTools.filter((tool): tool is string =>
+    typeof tool === 'string'
+    && tool.startsWith('mcp__')
+    && !loadedMcpTools.value.has(tool),
+  ),
+)
+const mcpToolGroups = computed(() =>
+  mcpServers.value.map(server => ({
+    id: server.id,
+    title: `MCP: ${server.name}`,
+    description: server.connected ? `${server.toolCount} 个工具` : '未连接',
+    note: server.toolNames.length
+      ? ''
+      : server.connected ? '该服务器暂未暴露工具。' : '连接后可选择该服务器暴露的工具。',
+    error: server.error ?? '',
+    items: server.toolNames.map<ToolPermissionItem>(toolName => ({
+      value: toolName,
+      label: getMcpToolDisplayName(server.name, toolName),
+      detail: toolName,
+      disabled: !server.connected,
+    })),
+  })),
+)
+const unknownMcpToolGroups = computed(() => {
+  const groups = new Map<string, ToolPermissionItem[]>()
+
+  for (const toolName of unknownMcpTools.value) {
+    const serverName = getMcpServerName(toolName)
+    const groupKey = serverName || 'unknown'
+    const items = groups.get(groupKey) ?? []
+
+    items.push({
+      value: toolName,
+      label: serverName ? getMcpOriginalToolName(serverName, toolName) : toolName,
+      detail: toolName,
+    })
+
+    groups.set(groupKey, items)
+  }
+
+  return [...groups.entries()].map(([serverName, items]) => ({
+    id: `unknown-${serverName}`,
+    title: serverName === 'unknown' ? 'MCP: 未识别来源' : `MCP: ${serverName}`,
+    items,
+  }))
+})
+
 function clearAvatar() {
   state.avatar = ''
   avatarUploadError.value = ''
@@ -276,6 +375,33 @@ function handleSubmit() {
     systemPrompt: state.systemPrompt.trim(),
     enabledTools: [...state.enabledTools],
   })
+}
+
+function refreshMcpStatus() {
+  void refreshMcpStatusRaw()
+}
+
+function getMcpToolDisplayName(serverName: string, toolName: string) {
+  return toolName.replace(new RegExp(`^mcp__${escapeRegExp(serverName)}__`), '')
+}
+
+function getMcpServerName(toolName: string) {
+  const prefix = 'mcp__'
+  const separatorIndex = toolName.indexOf('__', prefix.length)
+
+  if (!toolName.startsWith(prefix) || separatorIndex === -1) {
+    return ''
+  }
+
+  return toolName.slice(prefix.length, separatorIndex)
+}
+
+function getMcpOriginalToolName(serverName: string, toolName: string) {
+  return toolName.slice(`mcp__${serverName}__`.length) || toolName
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 async function uploadAvatar(file: File) {

@@ -2,19 +2,25 @@ import http from 'http'
 import { randomUUID } from 'crypto'
 import {
   createBot,
+  createMcpServer,
   createRole,
   deleteBot,
+  deleteMcpServer,
   deleteRole,
   getBotWithRole,
+  getMcpServer,
   getRole,
   listBotsWithRoles,
+  listMcpServers,
   listRoles,
   updateBot,
+  updateMcpServer,
   updateRole,
 } from '@zakobot/database'
-import type { DB, RoleRow } from '@zakobot/database'
+import type { DB, McpServerRow, RoleRow } from '@zakobot/database'
 import type { BotManager } from '../bot/bot-manager.js'
 import type { PluginLoader } from '../plugins/loader.js'
+import type { McpManager } from '../mcp/index.js'
 import { getSearchSettings, saveSearchSettings } from '../settings/search-settings.js'
 import { getBrowseSettings, saveBrowseSettings } from '../settings/browse-settings.js'
 import { getGeneralSettings, saveGeneralSettings } from '../settings/general-settings.js'
@@ -28,9 +34,12 @@ import type {
   CreateConversationTopicInput,
   RoleEditorInput,
   RoleProfile,
-  BuiltinTool,
   BrowseSettings,
   GeneralSettings,
+  McpServerEditorInput,
+  McpServerProfile,
+  McpServerStatus,
+  McpTransport,
   SearchSettings,
   SendConversationMessageInput,
   SendConversationMessageResult,
@@ -44,6 +53,7 @@ export class ApiServer {
     private db: DB,
     private botManager: BotManager,
     private pluginLoader: PluginLoader,
+    private mcpManager: McpManager,
   ) {
     this.server = http.createServer((req, res) => {
       void this.handle(req, res)
@@ -238,6 +248,22 @@ export class ApiServer {
     }
   }
 
+  private toMcpServerProfile(row: McpServerRow): McpServerProfile {
+    return {
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      transport: row.transport as McpTransport,
+      command: row.command,
+      args: this.parseJsonStringArray(row.args),
+      env: this.parseJsonStringRecord(row.env),
+      url: row.url,
+      enabled: row.enabled,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    }
+  }
+
   private parseRoleInput(body: Partial<RoleEditorInput>) {
     const name = body.name?.trim()
     const systemPrompt = body.systemPrompt?.trim()
@@ -330,6 +356,56 @@ export class ApiServer {
     }
   }
 
+  private parseMcpServerInput(body: Partial<McpServerEditorInput>): Omit<McpServerRow, 'id' | 'createdAt' | 'updatedAt'> {
+    const name = body.name?.trim()
+    const description = body.description?.trim() ?? ''
+    const transport = body.transport
+    const command = body.command?.trim() ?? ''
+    const args = Array.isArray(body.args) ? body.args.filter((item): item is string => typeof item === 'string') : []
+    const env = this.normalizeStringRecord(body.env)
+    const url = body.url?.trim() ?? ''
+
+    if (!name) {
+      throw new Error('MCP server name is required')
+    }
+
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+      throw new Error('MCP server name can only contain letters, numbers, underscores and hyphens')
+    }
+
+    if (transport !== 'stdio' && transport !== 'sse') {
+      throw new Error('MCP transport must be stdio or sse')
+    }
+
+    if (transport === 'stdio' && !command) {
+      throw new Error('MCP stdio command is required')
+    }
+
+    if (transport === 'sse') {
+      if (!url) {
+        throw new Error('MCP SSE URL is required')
+      }
+
+      try {
+        new URL(url)
+      }
+      catch {
+        throw new Error('MCP SSE URL is invalid')
+      }
+    }
+
+    return {
+      name,
+      description,
+      transport,
+      command,
+      args: JSON.stringify(args),
+      env: JSON.stringify(env),
+      url,
+      enabled: body.enabled === false ? false : true,
+    }
+  }
+
   private parseGeneralSettingsInput(body: Partial<GeneralSettings>): GeneralSettings {
     const rounds = typeof body.maxToolCallRounds === 'number'
       ? body.maxToolCallRounds
@@ -391,7 +467,38 @@ export class ApiServer {
     }
   }
 
-  private parseEnabledTools(value: string): BuiltinTool[] {
+  private parseJsonStringArray(value: string): string[] {
+    try {
+      const parsed = JSON.parse(value) as unknown
+      return Array.isArray(parsed)
+        ? parsed.filter((item): item is string => typeof item === 'string')
+        : []
+    }
+    catch {
+      return []
+    }
+  }
+
+  private parseJsonStringRecord(value: string): Record<string, string> {
+    try {
+      return this.normalizeStringRecord(JSON.parse(value) as unknown)
+    }
+    catch {
+      return {}
+    }
+  }
+
+  private normalizeStringRecord(value: unknown): Record<string, string> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return {}
+    }
+
+    return Object.fromEntries(
+      Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+    )
+  }
+
+  private parseEnabledTools(value: string): string[] {
     try {
       return this.normalizeEnabledTools(JSON.parse(value) as unknown)
     }
@@ -400,15 +507,44 @@ export class ApiServer {
     }
   }
 
-  private normalizeEnabledTools(value: unknown): BuiltinTool[] {
+  private normalizeEnabledTools(value: unknown): string[] {
     if (!Array.isArray(value)) {
       return []
     }
 
-    const allowed = new Set<BuiltinTool>(['web_search', 'web_browse', 'shell_exec', 'file_read', 'file_write', 'file_edit', 'file_list'])
-    return [...new Set(value)].filter((tool): tool is BuiltinTool =>
-      typeof tool === 'string' && allowed.has(tool as BuiltinTool),
-    )
+    const builtinTools = new Set<string>(['web_search', 'web_browse', 'shell_exec', 'file_read', 'file_write', 'file_edit', 'file_list'])
+    const result: string[] = []
+    const seen = new Set<string>()
+
+    for (const tool of value) {
+      if (typeof tool !== 'string' || seen.has(tool)) {
+        continue
+      }
+
+      seen.add(tool)
+
+      if (builtinTools.has(tool) || /^mcp__[a-zA-Z0-9_-]+__.+$/.test(tool)) {
+        result.push(tool)
+      }
+    }
+
+    return result
+  }
+
+  private listMcpStatus(): McpServerStatus[] {
+    const statusById = new Map(this.mcpManager.getStatus().map(status => [status.id, status]))
+
+    return listMcpServers(this.db).map((server) => {
+      const status = statusById.get(server.id)
+      return {
+        id: server.id,
+        name: server.name,
+        connected: status?.connected ?? false,
+        toolCount: status?.toolCount ?? 0,
+        toolNames: status?.toolNames ?? [],
+        error: status?.error,
+      }
+    })
   }
 
   private normalizeJinaRetainImages(value: unknown): BrowseSettings['jinaRetainImages'] {
@@ -454,6 +590,36 @@ export class ApiServer {
       return this.json(res, { ok: true, data: this.pluginLoader.list() })
     }
 
+    if (pathname === '/mcp/status' && req.method === 'GET') {
+      return this.json(res, { ok: true, data: this.listMcpStatus() })
+    }
+
+    if (pathname === '/mcp/servers' && req.method === 'GET') {
+      return this.json(res, {
+        ok: true,
+        data: listMcpServers(this.db).map(row => this.toMcpServerProfile(row)),
+      })
+    }
+
+    if (pathname === '/mcp/servers' && req.method === 'POST') {
+      try {
+        const payload = this.parseMcpServerInput(await this.readJson<McpServerEditorInput>(req))
+        const created = createMcpServer(this.db, payload)
+
+        if (created.enabled) {
+          this.mcpManager.connect(created).catch((error) => {
+            console.error(`[ApiServer] Failed to connect MCP server "${created.name}":`, error)
+          })
+        }
+
+        return this.json(res, { ok: true, data: this.toMcpServerProfile(created) }, 201)
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid request body'
+        return this.json(res, { ok: false, error: message }, 400)
+      }
+    }
+
     if (pathname === '/settings/search' && req.method === 'GET') {
       return this.json(res, { ok: true, data: getSearchSettings(this.db) })
     }
@@ -495,6 +661,85 @@ export class ApiServer {
       }
       catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid request body'
+        return this.json(res, { ok: false, error: message }, 400)
+      }
+    }
+
+    const mcpServerReconnectMatch = pathname.match(/^\/mcp\/servers\/([^/]+)\/reconnect$/)
+    if (mcpServerReconnectMatch && req.method === 'POST') {
+      const server = getMcpServer(this.db, mcpServerReconnectMatch[1])
+
+      if (!server) {
+        return this.json(res, { ok: false, error: 'MCP server not found' }, 404)
+      }
+
+      try {
+        await this.mcpManager.reconnect(server)
+        return this.json(res, { ok: true, data: this.toMcpServerProfile(server) })
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to reconnect MCP server'
+        return this.json(res, { ok: false, error: message }, 400)
+      }
+    }
+
+    const mcpServerMatch = pathname.match(/^\/mcp\/servers\/([^/]+)$/)
+    if (mcpServerMatch && req.method === 'GET') {
+      const server = getMcpServer(this.db, mcpServerMatch[1])
+
+      if (!server) {
+        return this.json(res, { ok: false, error: 'MCP server not found' }, 404)
+      }
+
+      return this.json(res, { ok: true, data: this.toMcpServerProfile(server) })
+    }
+
+    if (mcpServerMatch && req.method === 'PUT') {
+      const existing = getMcpServer(this.db, mcpServerMatch[1])
+
+      if (!existing) {
+        return this.json(res, { ok: false, error: 'MCP server not found' }, 404)
+      }
+
+      try {
+        const payload = this.parseMcpServerInput(await this.readJson<McpServerEditorInput>(req))
+        const updated = updateMcpServer(this.db, mcpServerMatch[1], payload)
+
+        if (!updated) {
+          throw new Error('Failed to update MCP server')
+        }
+
+        if (updated.enabled) {
+          this.mcpManager.reconnect(updated).catch((error) => {
+            console.error(`[ApiServer] Failed to reconnect MCP server "${updated.name}":`, error)
+          })
+        }
+        else {
+          await this.mcpManager.disconnect(updated.id)
+        }
+
+        return this.json(res, { ok: true, data: this.toMcpServerProfile(updated) })
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid request body'
+        return this.json(res, { ok: false, error: message }, 400)
+      }
+    }
+
+    if (mcpServerMatch && req.method === 'DELETE') {
+      const existing = getMcpServer(this.db, mcpServerMatch[1])
+
+      if (!existing) {
+        return this.json(res, { ok: false, error: 'MCP server not found' }, 404)
+      }
+
+      try {
+        await this.mcpManager.disconnect(existing.id)
+        deleteMcpServer(this.db, existing.id)
+        return this.json(res, { ok: true, data: this.toMcpServerProfile(existing) })
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to delete MCP server'
         return this.json(res, { ok: false, error: message }, 400)
       }
     }

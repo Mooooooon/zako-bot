@@ -63,6 +63,13 @@ const settingItems = [
     match: '/settings/browse',
   },
   {
+    label: 'MCP',
+    icon: 'i-heroicons-server-stack-20-solid',
+    value: 'mcp',
+    to: '/settings/mcp',
+    match: '/settings/mcp',
+  },
+  {
     label: '密码设置',
     icon: 'i-heroicons-lock-closed-20-solid',
     value: 'password',

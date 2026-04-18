@@ -3,10 +3,12 @@
   "version": "0.2.0",
   "private": true,
   "scripts": {
+    "dev:deps:build": "pnpm --filter @zakobot/shared build && pnpm --filter @zakobot/database build",
     "dev:deps": "concurrently \"pnpm --filter @zakobot/shared dev\" \"pnpm --filter @zakobot/database dev\"",
-    "dev:core": "pnpm --filter @zakobot/core dev",
+    "dev:core": "pnpm dev:deps:build && pnpm --filter @zakobot/core dev",
+    "dev:core:delayed": "node -e \"setTimeout(() => {}, 5000)\" && pnpm --filter @zakobot/core dev",
     "dev:panel": "pnpm --filter @zakobot/panel dev",
-    "dev": "concurrently \"pnpm dev:deps\" \"pnpm dev:core\" \"pnpm dev:panel\"",
+    "dev": "pnpm dev:deps:build && concurrently \"pnpm dev:deps\" \"pnpm dev:core:delayed\" \"pnpm dev:panel\"",
     "build": "pnpm --filter @zakobot/shared --fail-if-no-match build && pnpm --filter @zakobot/database --fail-if-no-match build && pnpm --filter @zakobot/core --fail-if-no-match build && pnpm --filter @zakobot/panel --fail-if-no-match build && pnpm --filter ./packages/cli --fail-if-no-match build",
     "lint": "pnpm -r lint"
   },

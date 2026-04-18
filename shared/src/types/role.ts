@@ -2,12 +2,14 @@ import type { LLMConfig } from './llm.js'
 
 export type BuiltinTool = 'web_search' | 'web_browse' | 'shell_exec' | 'file_read' | 'file_write' | 'file_edit' | 'file_list'
 
+/** enabledTools 可以是内置工具名或 MCP 工具名（格式：mcp__serverName__toolName） */
+export type EnabledTool = BuiltinTool | string
+
 export interface RoleEditorInput {
   avatar: string
   name: string
   systemPrompt: string
-  /** Which built-in tools this role is allowed to use */
-  enabledTools: BuiltinTool[]
+  enabledTools: EnabledTool[]
 }
 
 export interface RoleProfile extends RoleEditorInput {
@@ -23,8 +25,7 @@ export interface Role {
   /** System prompt that defines the AI's personality and behavior */
   systemPrompt: string
   llmConfig: LLMConfig
-  /** Which built-in tools this role is allowed to use */
-  enabledTools: BuiltinTool[]
+  enabledTools: EnabledTool[]
   createdAt: string
   updatedAt: string
 }

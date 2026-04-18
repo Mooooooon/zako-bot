@@ -1,7 +1,7 @@
 import type { LLMTool } from '@zakobot/shared'
 
 export interface ToolRegistrationOptions {
-  source: 'builtin' | 'plugin'
+  source: 'builtin' | 'plugin' | 'mcp'
   owner?: string
 }
 

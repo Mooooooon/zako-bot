@@ -2,10 +2,11 @@ import 'dotenv/config'
 import { resolve } from 'path'
 import { homedir } from 'os'
 import { mkdirSync } from 'fs'
-import { createDb } from '@zakobot/database'
+import { createDb, listEnabledMcpServers } from '@zakobot/database'
 import { BotManager } from './bot/bot-manager.js'
 import { PluginLoader } from './plugins/loader.js'
 import { ApiServer } from './api/server.js'
+import { McpManager } from './mcp/index.js'
 import { seed } from './seed.js'
 import { createDefaultToolRegistry } from './tools/index.js'
 import { getSearchSettings } from './settings/search-settings.js'
@@ -27,15 +28,17 @@ async function main() {
     () => getSearchSettings(db),
     () => getBrowseSettings(db),
   )
+  const mcpManager = new McpManager(toolRegistry)
   const botManager = new BotManager(db, toolRegistry, () => getGeneralSettings(db))
   const pluginLoader = new PluginLoader(botManager, toolRegistry)
-  const apiServer = new ApiServer(db, botManager, pluginLoader)
+  const apiServer = new ApiServer(db, botManager, pluginLoader, mcpManager)
 
   const stopServices = async () => {
     const tasks = [
       apiServer.stop(),
       pluginLoader.unloadAll(),
       botManager.stopAll(),
+      mcpManager.disconnectAll(),
     ]
 
     const results = await Promise.allSettled(tasks)
@@ -69,6 +72,7 @@ async function main() {
   try {
     await apiServer.start()
     await pluginLoader.loadAll()
+    await mcpManager.connectAll(listEnabledMcpServers(db))
     await botManager.startAll()
   } catch (error) {
     await stopServices()
