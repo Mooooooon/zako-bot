@@ -21,7 +21,7 @@ export class Agent {
 
   async *respondStream(topicId: string, requestApproval?: ToolApprovalCallback): AsyncGenerator<AgentEvent> {
     const role = this.getRole()
-    const { maxToolCallRounds, sendTime, timezone } = this.getGeneralSettings()
+    const { systemPrompt, maxToolCallRounds, sendTime, timezone } = this.getGeneralSettings()
     const history = this.conversations.listTopicHistory(topicId)
     const enabledTools = this.parseEnabledTools(role.enabledTools)
     const enabledSkills = this.parseEnabledSkills(role.enabledSkills)
@@ -31,6 +31,7 @@ export class Agent {
     const historyWithTime = sendTime ? this.injectSendTime(history, timezone) : history
 
     const messages = [
+      ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
       { role: 'system' as const, content: role.systemPrompt },
       ...(skillPrompt ? [{ role: 'system' as const, content: skillPrompt }] : []),
       ...(toolPrompt ? [{ role: 'system' as const, content: toolPrompt }] : []),
@@ -42,7 +43,7 @@ export class Agent {
 
   async respond(topicId: string): Promise<string> {
     const role = this.getRole()
-    const { maxToolCallRounds, sendTime, timezone } = this.getGeneralSettings()
+    const { systemPrompt, maxToolCallRounds, sendTime, timezone } = this.getGeneralSettings()
     const history = this.conversations.listTopicHistory(topicId)
 
     const enabledTools = this.parseEnabledTools(role.enabledTools)
@@ -54,6 +55,7 @@ export class Agent {
     const historyWithTime = sendTime ? this.injectSendTime(history, timezone) : history
 
     const messages = [
+      ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
       { role: 'system' as const, content: role.systemPrompt },
       ...(skillPrompt
         ? [{ role: 'system' as const, content: skillPrompt }]

@@ -31,6 +31,7 @@ export function saveGeneralSettings(db: DB, value: Partial<GeneralSettings>): Ge
 
 function normalizeGeneralSettings(value: Record<string, unknown>): GeneralSettings {
   return {
+    systemPrompt: typeof value.systemPrompt === 'string' ? value.systemPrompt.trim() : '',
     maxToolCallRounds: normalizeMaxToolCallRounds(value.maxToolCallRounds),
     requireMention: value.requireMention === false || value.requireMention === 'false' ? false : true,
     threadMode: value.threadMode === true || value.threadMode === 'true' ? true : false,

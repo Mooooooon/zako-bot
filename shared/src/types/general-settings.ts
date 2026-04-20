@@ -2,6 +2,7 @@ export type ToolApprovalMode = 'all' | 'sensitive' | 'none'
 export type ToolProcessMode = 'none' | 'tools_only' | 'full'
 
 export interface GeneralSettings {
+  systemPrompt: string
   maxToolCallRounds: number
   requireMention: boolean
   threadMode: boolean

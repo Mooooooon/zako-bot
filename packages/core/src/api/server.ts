@@ -469,6 +469,7 @@ export class ApiServer {
       ? Math.min(Math.trunc(maxThreadsRaw), 100)
       : 0
     return {
+      systemPrompt: body.systemPrompt?.trim() ?? '',
       maxToolCallRounds,
       requireMention: body.requireMention === false ? false : true,
       threadMode: body.threadMode === true ? true : false,

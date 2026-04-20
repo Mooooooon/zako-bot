@@ -54,7 +54,23 @@
           <USkeleton v-else-if="pending" class="h-40 w-full" />
 
           <template v-else>
-            <section v-if="activeSection === 'agent'" class="space-y-4">
+            <section v-if="activeSection === 'prompt'" class="space-y-4">
+              <UFormField
+                label="系统提示词"
+                name="systemPrompt"
+                description="作为所有角色的全局系统提示词，会放在提示词最上方发送。"
+              >
+                <UTextarea
+                  v-model="form.systemPrompt"
+                  class="w-full"
+                  :disabled="saving"
+                  :rows="12"
+                  placeholder="输入全局规则、身份边界或回复约束。"
+                />
+              </UFormField>
+            </section>
+
+            <section v-else-if="activeSection === 'agent'" class="space-y-4">
               <UFormField
                 label="工具调用轮次上限"
                 name="maxToolCallRounds"
@@ -215,7 +231,7 @@
 <script setup lang="ts">
 import type { GeneralSettings, ToolApprovalMode, ToolProcessMode } from '@zakobot/shared'
 
-type GeneralSection = 'agent' | 'discord' | 'time'
+type GeneralSection = 'prompt' | 'agent' | 'discord' | 'time'
 
 const toolApprovalOptions: Array<{ label: string; value: ToolApprovalMode; description: string }> = [
   { label: '始终确认', value: 'all', description: '所有工具调用都需要用户点击允许后才会执行。' },
@@ -238,6 +254,12 @@ const sections: Array<{
   description: string
 }> = [
   {
+    label: '系统提示词',
+    value: 'prompt',
+    icon: 'i-heroicons-document-text-20-solid',
+    description: '配置全局系统提示词。',
+  },
+  {
     label: 'AI 代理',
     value: 'agent',
     icon: 'i-heroicons-cpu-chip-20-solid',
@@ -259,12 +281,13 @@ const sections: Array<{
 
 const { data, pending, error, refresh } = await useFetch<{ ok: true, data: GeneralSettings }>('/api/settings/general')
 
-const activeSection = ref<GeneralSection>('agent')
+const activeSection = ref<GeneralSection>('prompt')
 const activeSectionMeta = computed(() =>
   sections.find(item => item.value === activeSection.value) ?? sections[0],
 )
 
 const form = reactive<GeneralSettings>({
+  systemPrompt: '',
   maxToolCallRounds: 8,
   requireMention: true,
   threadMode: false,
@@ -280,6 +303,7 @@ watch(
   () => data.value?.data,
   (settings) => {
     if (!settings) return
+    form.systemPrompt = settings.systemPrompt
     form.maxToolCallRounds = settings.maxToolCallRounds
     form.requireMention = settings.requireMention
     form.threadMode = settings.threadMode
@@ -307,6 +331,7 @@ async function handleSave() {
     const updated = await $fetch<{ ok: true, data: GeneralSettings }>('/api/settings/general', {
       method: 'PUT',
       body: {
+        systemPrompt: form.systemPrompt.trim(),
         maxToolCallRounds: Number(form.maxToolCallRounds),
         requireMention: form.requireMention,
         threadMode: form.threadMode,
