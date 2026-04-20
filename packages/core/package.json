@@ -27,12 +27,14 @@
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@zakobot/database": "workspace:*",
     "@zakobot/shared": "workspace:*",
+    "adm-zip": "^0.5.17",
     "discord.js": "^14.18.0",
     "dotenv": "^16.4.7",
     "node-cron": "^3.0.3",
     "openai": "^6.34.0"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
     "@types/node": "^22.0.0",
     "@types/node-cron": "^3.0.11",
     "tsx": "^4.19.2",

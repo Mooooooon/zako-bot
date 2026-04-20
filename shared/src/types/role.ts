@@ -10,6 +10,7 @@ export interface RoleEditorInput {
   name: string
   systemPrompt: string
   enabledTools: EnabledTool[]
+  enabledSkills: string[]
 }
 
 export interface RoleProfile extends RoleEditorInput {
@@ -26,6 +27,7 @@ export interface Role {
   systemPrompt: string
   llmConfig: LLMConfig
   enabledTools: EnabledTool[]
+  enabledSkills: string[]
   createdAt: string
   updatedAt: string
 }

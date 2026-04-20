@@ -12,6 +12,7 @@ import { DiscordAdapter } from './discord-adapter.js'
 import { Agent } from '../llm/agent.js'
 import { ConversationService } from '../llm/conversation-service.js'
 import type { ToolRegistry } from '../tools/index.js'
+import type { SkillManager } from '../skills/index.js'
 
 export class BotManager {
   private adapters = new Map<string, DiscordAdapter>()
@@ -20,6 +21,7 @@ export class BotManager {
   constructor(
     private db: DB,
     private toolRegistry: ToolRegistry,
+    private skillManager: SkillManager,
     private getGeneralSettings: () => GeneralSettings,
   ) {
     this.conversations = new ConversationService(db)
@@ -204,6 +206,7 @@ export class BotManager {
       },
       this.conversations,
       this.toolRegistry,
+      this.skillManager,
       this.getGeneralSettings,
     )
   }

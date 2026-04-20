@@ -12,6 +12,7 @@ export const roles = sqliteTable('roles', {
   llmBaseUrl: text('llm_base_url'),
   // Enabled tools as JSON array, e.g. '["web_search","web_browse"]'
   enabledTools: text('enabled_tools').notNull().default('[]'),
+  enabledSkills: text('enabled_skills').notNull().default('[]'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
 })

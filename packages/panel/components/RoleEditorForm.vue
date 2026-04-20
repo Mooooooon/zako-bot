@@ -108,6 +108,55 @@
       </UFormField>
 
       <UFormField
+        label="技能"
+        name="enabledSkills"
+        description="为角色启用工作流、领域知识和输出规范。"
+      >
+        <div class="space-y-3">
+          <div v-if="skillsPending && !skills.length" class="space-y-2">
+            <USkeleton class="h-10 w-full" />
+            <USkeleton class="h-10 w-full" />
+          </div>
+
+          <ToolPermissionGroup
+            v-else-if="skillItems.length"
+            v-model="state.enabledSkills"
+            title="可用技能"
+            description="启用后会在相关任务中应用"
+            :items="skillItems"
+            :disabled="pending"
+            empty-text="暂无可用技能。"
+          />
+
+          <UEmpty
+            v-else
+            icon="i-heroicons-academic-cap-20-solid"
+            title="暂无技能"
+            description="在技能设置中创建或导入技能后，可在这里启用。"
+          />
+
+          <UAlert
+            v-if="missingSkillTools.length"
+            color="warning"
+            variant="subtle"
+            icon="i-heroicons-exclamation-triangle-20-solid"
+            title="技能依赖未启用"
+            :description="`请在工具权限中启用：${missingSkillTools.join('、')}`"
+          />
+
+          <ToolPermissionGroup
+            v-if="unknownSkillItems.length"
+            v-model="state.enabledSkills"
+            title="已保存但未加载"
+            description="已保存但当前未加载"
+            note="取消勾选后保存，可从角色配置中移除这些技能。"
+            :items="unknownSkillItems"
+            :disabled="pending"
+          />
+        </div>
+      </UFormField>
+
+      <UFormField
         label="工具权限"
         name="enabledTools"
         description="允许模型在需要时调用外部能力。标记「敏感」的工具建议在通用设置中开启工具调用安全确认。"
@@ -209,7 +258,7 @@
 </template>
 
 <script setup lang="ts">
-import type { McpServerStatus, RoleEditorInput } from '@zakobot/shared'
+import type { McpServerStatus, RoleEditorInput, SkillProfile } from '@zakobot/shared'
 
 const props = defineProps<{
   title: string
@@ -228,6 +277,7 @@ const state = reactive<RoleEditorInput>({
   name: '',
   systemPrompt: '',
   enabledTools: [],
+  enabledSkills: [],
 })
 
 interface ToolPermissionItem {
@@ -271,6 +321,7 @@ const avatarUploadFile = ref<File | null>(null)
 const avatarUploadPending = ref(false)
 const avatarUploadError = ref('')
 const { data: mcpStatusData, pending: mcpStatusPending, refresh: refreshMcpStatusRaw } = useFetch<{ ok: true; data: McpServerStatus[] }>('/api/mcp/status')
+const { data: skillsData, pending: skillsPending } = useFetch<{ ok: true; data: SkillProfile[] }>('/api/skills')
 
 const squareAvatarUi = {
   root: 'rounded-md overflow-hidden bg-default',
@@ -284,6 +335,7 @@ watch(
     state.name = value.name
     state.systemPrompt = value.systemPrompt
     state.enabledTools = [...value.enabledTools]
+    state.enabledSkills = [...value.enabledSkills]
     avatarUploadFile.value = null
     avatarUploadError.value = ''
   },
@@ -309,6 +361,44 @@ const canSubmit = computed(() =>
   && state.systemPrompt.trim().length > 0,
 )
 
+const skills = computed(() => skillsData.value?.data ?? [])
+const loadedSkillIds = computed(() => new Set(skills.value.map(skill => skill.id)))
+const unknownSkillItems = computed(() =>
+  state.enabledSkills
+    .filter(skillId => !loadedSkillIds.value.has(skillId))
+    .map<ToolPermissionItem>(skillId => ({
+      value: skillId,
+      label: skillId,
+      detail: skillId,
+    })),
+)
+const skillItems = computed<ToolPermissionItem[]>(() =>
+  skills.value.map(skill => ({
+    value: skill.id,
+    label: skill.name,
+    description: getSkillDescription(skill),
+    detail: skill.requiredTools.length ? `依赖工具：${skill.requiredTools.join('、')}` : skill.slug,
+    disabled: !skill.enabled,
+  })),
+)
+const missingSkillTools = computed(() => {
+  const enabledTools = new Set(state.enabledTools)
+  const missing = new Set<string>()
+
+  for (const skill of skills.value) {
+    if (!state.enabledSkills.includes(skill.id)) {
+      continue
+    }
+
+    for (const tool of skill.requiredTools) {
+      if (!enabledTools.has(tool)) {
+        missing.add(tool)
+      }
+    }
+  }
+
+  return [...missing]
+})
 const mcpServers = computed(() => mcpStatusData.value?.data ?? [])
 const loadedMcpTools = computed(() => new Set(mcpServers.value.flatMap(server => server.toolNames)))
 const unknownMcpTools = computed(() =>
@@ -374,11 +464,20 @@ function handleSubmit() {
     name: state.name.trim(),
     systemPrompt: state.systemPrompt.trim(),
     enabledTools: [...state.enabledTools],
+    enabledSkills: [...state.enabledSkills],
   })
 }
 
 function refreshMcpStatus() {
   void refreshMcpStatusRaw()
+}
+
+function getSkillDescription(skill: SkillProfile) {
+  if (!skill.enabled) {
+    return '已关闭'
+  }
+
+  return skill.description || '已启用的技能会补充角色工作方式。'
 }
 
 function getMcpToolDisplayName(serverName: string, toolName: string) {

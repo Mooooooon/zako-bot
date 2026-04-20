@@ -68,6 +68,7 @@ const form = computed<RoleEditorInput>(() => ({
   name: role.value?.name ?? '',
   systemPrompt: role.value?.systemPrompt ?? '',
   enabledTools: role.value?.enabledTools ?? [],
+  enabledSkills: role.value?.enabledSkills ?? [],
 }))
 
 const deleteConfirmActions = computed(() => [

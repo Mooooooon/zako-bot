@@ -1,0 +1,41 @@
+export type SkillSourceType = 'md' | 'zip' | 'manual'
+
+export interface SkillEditorInput {
+  name: string
+  description: string
+  content: string
+  enabled: boolean
+  requiredTools: string[]
+}
+
+export interface SkillImportInput {
+  fileName: string
+  contentBase64: string
+  sourceType?: SkillSourceType
+}
+
+export interface SkillReferenceInfo {
+  path: string
+  title: string
+  size: number
+}
+
+export interface SkillProfile {
+  id: string
+  name: string
+  slug: string
+  description: string
+  version: string
+  sourceType: SkillSourceType
+  entryFile: string
+  enabled: boolean
+  requiredTools: string[]
+  referenceCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SkillContent {
+  content: string
+  references: SkillReferenceInfo[]
+}

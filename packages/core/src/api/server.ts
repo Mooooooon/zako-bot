@@ -21,6 +21,7 @@ import type { DB, McpServerRow, RoleRow } from '@zakobot/database'
 import type { BotManager } from '../bot/bot-manager.js'
 import type { PluginLoader } from '../plugins/loader.js'
 import type { McpManager } from '../mcp/index.js'
+import type { SkillManager } from '../skills/index.js'
 import { getSearchSettings, saveSearchSettings } from '../settings/search-settings.js'
 import { getBrowseSettings, saveBrowseSettings } from '../settings/browse-settings.js'
 import { getGeneralSettings, saveGeneralSettings } from '../settings/general-settings.js'
@@ -43,6 +44,10 @@ import type {
   SearchSettings,
   SendConversationMessageInput,
   SendConversationMessageResult,
+  SkillContent,
+  SkillEditorInput,
+  SkillImportInput,
+  SkillProfile,
 } from '@zakobot/shared'
 
 export class ApiServer {
@@ -54,6 +59,7 @@ export class ApiServer {
     private botManager: BotManager,
     private pluginLoader: PluginLoader,
     private mcpManager: McpManager,
+    private skillManager: SkillManager,
   ) {
     this.server = http.createServer((req, res) => {
       void this.handle(req, res)
@@ -170,6 +176,7 @@ export class ApiServer {
       name: row.name,
       systemPrompt: row.systemPrompt,
       enabledTools: this.parseEnabledTools(row.enabledTools),
+      enabledSkills: this.parseEnabledSkills(row.enabledSkills),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     }
@@ -277,13 +284,49 @@ export class ApiServer {
     }
 
     const enabledTools = this.normalizeEnabledTools(body.enabledTools)
+    const enabledSkills = this.normalizeEnabledSkills(body.enabledSkills)
 
     return {
       avatar: body.avatar?.trim() ?? '',
       name,
       systemPrompt,
       enabledTools,
+      enabledSkills,
     }
+  }
+
+  private parseSkillInput(body: Partial<SkillEditorInput>): SkillEditorInput {
+    const content = body.content?.trim()
+    const name = body.name?.trim() ?? ''
+    const description = body.description?.trim() ?? ''
+
+    if (!content) {
+      throw new Error('Skill content is required')
+    }
+
+    return {
+      name,
+      description,
+      content,
+      enabled: body.enabled === false ? false : true,
+      requiredTools: this.normalizeEnabledTools(body.requiredTools),
+    }
+  }
+
+  private parseSkillImportInput(body: Partial<SkillImportInput>): SkillImportInput {
+    const fileName = body.fileName?.trim()
+    const contentBase64 = body.contentBase64?.trim()
+    const sourceType = body.sourceType === 'md' || body.sourceType === 'zip' ? body.sourceType : undefined
+
+    if (!fileName) {
+      throw new Error('Skill file name is required')
+    }
+
+    if (!contentBase64) {
+      throw new Error('Skill file content is required')
+    }
+
+    return { fileName, contentBase64, sourceType }
   }
 
   private parseBotInput(body: Partial<BotEditorInput>) {
@@ -531,6 +574,40 @@ export class ApiServer {
     return result
   }
 
+  private parseEnabledSkills(value: string): string[] {
+    try {
+      return this.normalizeEnabledSkills(JSON.parse(value) as unknown)
+    }
+    catch {
+      return []
+    }
+  }
+
+  private normalizeEnabledSkills(value: unknown): string[] {
+    if (!Array.isArray(value)) {
+      return []
+    }
+
+    const result: string[] = []
+    const seen = new Set<string>()
+
+    for (const skillId of value) {
+      if (typeof skillId !== 'string') {
+        continue
+      }
+
+      const normalized = skillId.trim()
+      if (!normalized || seen.has(normalized)) {
+        continue
+      }
+
+      seen.add(normalized)
+      result.push(normalized)
+    }
+
+    return result
+  }
+
   private listMcpStatus(): McpServerStatus[] {
     const statusById = new Map(this.mcpManager.getStatus().map(status => [status.id, status]))
 
@@ -588,6 +665,32 @@ export class ApiServer {
 
     if (pathname === '/plugins' && req.method === 'GET') {
       return this.json(res, { ok: true, data: this.pluginLoader.list() })
+    }
+
+    if (pathname === '/skills' && req.method === 'GET') {
+      return this.json<SkillProfile[]>(res, { ok: true, data: this.skillManager.list() })
+    }
+
+    if (pathname === '/skills' && req.method === 'POST') {
+      try {
+        const payload = this.parseSkillInput(await this.readJson<SkillEditorInput>(req))
+        return this.json<SkillProfile>(res, { ok: true, data: this.skillManager.create(payload) }, 201)
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid request body'
+        return this.json(res, { ok: false, error: message }, 400)
+      }
+    }
+
+    if (pathname === '/skills/import' && req.method === 'POST') {
+      try {
+        const payload = this.parseSkillImportInput(await this.readJson<SkillImportInput>(req))
+        return this.json<SkillProfile>(res, { ok: true, data: this.skillManager.import(payload) }, 201)
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid request body'
+        return this.json(res, { ok: false, error: message }, 400)
+      }
     }
 
     if (pathname === '/mcp/status' && req.method === 'GET') {
@@ -762,6 +865,7 @@ export class ApiServer {
           llmApiKey: '',
           llmBaseUrl: null,
           enabledTools: JSON.stringify(payload.enabledTools),
+          enabledSkills: JSON.stringify(payload.enabledSkills),
           createdAt: now,
           updatedAt: now,
         })
@@ -902,6 +1006,7 @@ export class ApiServer {
           name: payload.name,
           systemPrompt: payload.systemPrompt,
           enabledTools: JSON.stringify(payload.enabledTools),
+          enabledSkills: JSON.stringify(payload.enabledSkills),
           updatedAt: new Date(),
         })
 
@@ -909,6 +1014,57 @@ export class ApiServer {
       }
       catch (error) {
         const message = error instanceof Error ? error.message : 'Invalid request body'
+        return this.json(res, { ok: false, error: message }, 400)
+      }
+    }
+
+    const skillContentMatch = pathname.match(/^\/skills\/([^/]+)\/content$/)
+    if (skillContentMatch && req.method === 'GET') {
+      try {
+        return this.json<SkillContent>(res, { ok: true, data: this.skillManager.getContent(skillContentMatch[1]) })
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Skill not found'
+        return this.json(res, { ok: false, error: message }, 404)
+      }
+    }
+
+    const skillMatch = pathname.match(/^\/skills\/([^/]+)$/)
+    if (skillMatch && req.method === 'GET') {
+      const skill = this.skillManager.get(skillMatch[1])
+
+      if (!skill) {
+        return this.json(res, { ok: false, error: 'Skill not found' }, 404)
+      }
+
+      return this.json<SkillProfile>(res, { ok: true, data: skill })
+    }
+
+    if (skillMatch && req.method === 'PUT') {
+      if (!this.skillManager.get(skillMatch[1])) {
+        return this.json(res, { ok: false, error: 'Skill not found' }, 404)
+      }
+
+      try {
+        const payload = this.parseSkillInput(await this.readJson<SkillEditorInput>(req))
+        return this.json<SkillProfile>(res, { ok: true, data: this.skillManager.update(skillMatch[1], payload) })
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Invalid request body'
+        return this.json(res, { ok: false, error: message }, 400)
+      }
+    }
+
+    if (skillMatch && req.method === 'DELETE') {
+      if (!this.skillManager.get(skillMatch[1])) {
+        return this.json(res, { ok: false, error: 'Skill not found' }, 404)
+      }
+
+      try {
+        return this.json<SkillProfile>(res, { ok: true, data: this.skillManager.remove(skillMatch[1]) })
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to delete skill'
         return this.json(res, { ok: false, error: message }, 400)
       }
     }

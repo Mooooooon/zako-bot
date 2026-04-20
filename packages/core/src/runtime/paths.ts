@@ -10,6 +10,10 @@ export function getMcpWorkdir(zakobotHome: string): string {
   return resolveConfigPath(process.env.ZAKOBOT_MCP_WORKDIR) ?? resolve(zakobotHome, 'mcp')
 }
 
+export function getSkillsRoot(zakobotHome: string): string {
+  return resolveConfigPath(process.env.ZAKOBOT_SKILLS_DIR) ?? resolve(zakobotHome, 'skills')
+}
+
 export function resolveZakobotPath(basePath: string, ...paths: string[]): string {
   return resolve(basePath, ...paths)
 }

@@ -3,6 +3,7 @@ import type { AgentEvent, ChatMessage, GeneralSettings, LLMConfig, LLMTool, Tool
 import { LLMClient } from './client.js'
 import { ConversationService } from './conversation-service.js'
 import type { ToolRegistry } from '../tools/index.js'
+import type { SkillManager } from '../skills/index.js'
 
 export class Agent {
   private client: LLMClient
@@ -12,6 +13,7 @@ export class Agent {
     llmConfig: LLMConfig,
     private conversations: ConversationService,
     private toolRegistry: ToolRegistry,
+    private skillManager: SkillManager,
     private getGeneralSettings: () => GeneralSettings,
   ) {
     this.client = new LLMClient(llmConfig)
@@ -22,12 +24,15 @@ export class Agent {
     const { maxToolCallRounds, sendTime, timezone } = this.getGeneralSettings()
     const history = this.conversations.listTopicHistory(topicId)
     const enabledTools = this.parseEnabledTools(role.enabledTools)
+    const enabledSkills = this.parseEnabledSkills(role.enabledSkills)
     const allowedTools = this.toolRegistry.listEnabled(enabledTools)
+    const skillPrompt = this.skillManager.buildPrompt(enabledSkills, this.getLatestUserText(history))
     const toolPrompt = this.buildToolPrompt(allowedTools)
     const historyWithTime = sendTime ? this.injectSendTime(history, timezone) : history
 
     const messages = [
       { role: 'system' as const, content: role.systemPrompt },
+      ...(skillPrompt ? [{ role: 'system' as const, content: skillPrompt }] : []),
       ...(toolPrompt ? [{ role: 'system' as const, content: toolPrompt }] : []),
       ...historyWithTime,
     ]
@@ -41,13 +46,18 @@ export class Agent {
     const history = this.conversations.listTopicHistory(topicId)
 
     const enabledTools = this.parseEnabledTools(role.enabledTools)
+    const enabledSkills = this.parseEnabledSkills(role.enabledSkills)
     const allowedTools = this.toolRegistry.listEnabled(enabledTools)
+    const skillPrompt = this.skillManager.buildPrompt(enabledSkills, this.getLatestUserText(history))
     const toolPrompt = this.buildToolPrompt(allowedTools)
 
     const historyWithTime = sendTime ? this.injectSendTime(history, timezone) : history
 
     const messages = [
       { role: 'system' as const, content: role.systemPrompt },
+      ...(skillPrompt
+        ? [{ role: 'system' as const, content: skillPrompt }]
+        : []),
       ...(toolPrompt
         ? [{ role: 'system' as const, content: toolPrompt }]
         : []),
@@ -168,5 +178,35 @@ export class Agent {
     catch {
       return []
     }
+  }
+
+  private parseEnabledSkills(value: string): string[] {
+    try {
+      const parsed = JSON.parse(value) as unknown
+      return Array.isArray(parsed)
+        ? parsed.filter((skill): skill is string => typeof skill === 'string')
+        : []
+    }
+    catch {
+      return []
+    }
+  }
+
+  private getLatestUserText(history: ChatMessage[]) {
+    const message = [...history].reverse().find(item => item.role === 'user')
+    const content = message?.content
+
+    if (!content) {
+      return ''
+    }
+
+    if (typeof content === 'string') {
+      return content
+    }
+
+    return content
+      .filter(part => part.type === 'text')
+      .map(part => part.text)
+      .join('\n')
   }
 }

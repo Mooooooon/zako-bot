@@ -70,6 +70,13 @@ const settingItems = [
     match: '/settings/mcp',
   },
   {
+    label: '技能',
+    icon: 'i-heroicons-academic-cap-20-solid',
+    value: 'skills',
+    to: '/settings/skills',
+    match: '/settings/skills',
+  },
+  {
     label: '密码设置',
     icon: 'i-heroicons-lock-closed-20-solid',
     value: 'password',
