@@ -190,13 +190,20 @@ pnpm dev
 
 ### 本地运行正式版
 
-如果不全局安装 `zakobot`，也可以在仓库目录中直接构建并运行正式产物：
+如果不全局安装 `zakobot`，也可以在仓库目录中直接运行已经构建好的正式产物：
 
 ```bash
 pnpm start
 ```
 
-该命令会先执行完整构建，再通过本地 CLI 启动 `core` 和 `panel`。
+如果代码有变更，或首次在当前目录运行，需要先构建再启动：
+
+```bash
+pnpm start:build
+```
+
+- `pnpm start`：直接启动已构建的正式产物
+- `pnpm start:build`：先完整构建，再启动 `core` 和 `panel`
 
 ### 常用命令
 
@@ -205,6 +212,7 @@ pnpm dev:deps
 pnpm dev:core
 pnpm dev:panel
 pnpm start
+pnpm start:build
 pnpm build
 pnpm lint
 ```
