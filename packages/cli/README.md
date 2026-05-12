@@ -99,7 +99,7 @@ CORE_API_URL=http://127.0.0.1:6325
 
 - Current runtime support is focused on Discord.
 - Model access is based on OpenAI-compatible APIs.
-- `zakobot init` creates `~/.zakobot/.env` as a config template reference.
+- `zakobot init` creates `~/.zakobot/.env`, and the CLI loads it automatically on startup.
 
 ## Repository
 

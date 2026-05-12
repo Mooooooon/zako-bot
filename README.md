@@ -151,7 +151,7 @@ CORE_API_PORT=7001 PANEL_PORT=7000 zakobot start
 其中：
 
 - `data.db` 是 SQLite 数据库
-- `.env` 会在 `zakobot init` 时创建，当前更适合作为配置模板参考
+- `.env` 会在启动时自动加载，用于保存运行配置
 
 ## 项目结构
 

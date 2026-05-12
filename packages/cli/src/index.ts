@@ -6,10 +6,13 @@ import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { homedir } from 'os'
 import { mkdirSync, existsSync, writeFileSync } from 'fs'
+import { config as loadDotenv } from 'dotenv'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
 const pkg = require('../package.json') as { version: string }
+
+loadRuntimeEnv()
 
 program
   .name('zakobot')
@@ -77,6 +80,27 @@ function cmdStart(): void {
 
 function zakobotHome() {
   return process.env.ZAKOBOT_HOME ?? resolve(homedir(), '.zakobot')
+}
+
+function loadRuntimeEnv() {
+  const initialHome = zakobotHome()
+  loadEnvFile(resolve(initialHome, '.env'))
+
+  const resolvedHome = zakobotHome()
+  if (resolvedHome !== initialHome) {
+    loadEnvFile(resolve(resolvedHome, '.env'))
+  }
+}
+
+function loadEnvFile(path: string) {
+  if (!existsSync(path)) {
+    return
+  }
+
+  loadDotenv({
+    path,
+    override: false,
+  })
 }
 
 function resolveEntry(pkgName: 'core' | 'panel'): string {
