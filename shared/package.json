@@ -15,6 +15,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./panel-auth": {
+      "import": "./dist/panel-auth.js",
+      "types": "./dist/panel-auth.d.ts"
     }
   },
   "publishConfig": {
@@ -26,6 +30,7 @@
     "dev": "tsc --watch"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "typescript": "^5.7.3"
   }
 }

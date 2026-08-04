@@ -56,12 +56,20 @@ zakobot init
 zakobot start
 zakobot core
 zakobot panel
+zakobot reset-password
 ```
 
 - `zakobot init`: initialize the ZakoBot working directory
 - `zakobot start`: start both `core` and `panel`
 - `zakobot core`: start only the bot core process
 - `zakobot panel`: start only the web panel
+- `zakobot reset-password`: reset the web panel password and sign out existing sessions
+
+`reset-password` prompts for the new password twice without displaying it. The password must contain at least 6 characters. For automation, read it from standard input:
+
+```bash
+printf 'new-password\n' | zakobot reset-password --password-stdin
+```
 
 ## Data Directory
 

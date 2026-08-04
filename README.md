@@ -78,12 +78,20 @@ zakobot init
 zakobot start
 zakobot core
 zakobot panel
+zakobot reset-password
 ```
 
 - `zakobot init`：初始化工作目录
 - `zakobot start`：同时启动 `core` 和 `panel`
 - `zakobot core`：只启动 Bot 核心进程
 - `zakobot panel`：只启动管理面板
+- `zakobot reset-password`：重置管理面板密码，并注销已有登录会话
+
+`reset-password` 默认会以隐藏输入的方式要求输入并确认新密码，密码至少为 6 位。自动化场景可以从标准输入读取：
+
+```bash
+printf 'new-password\n' | zakobot reset-password --password-stdin
+```
 
 ## 运行要求
 

@@ -25,6 +25,7 @@
   "dependencies": {
     "@zakobot/core": "workspace:*",
     "@zakobot/panel": "workspace:*",
+    "@zakobot/shared": "workspace:*",
     "commander": "^13.1.0",
     "dotenv": "^16.4.7"
   },

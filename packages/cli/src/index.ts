@@ -7,6 +7,9 @@ import { fileURLToPath } from 'url'
 import { homedir } from 'os'
 import { mkdirSync, existsSync, writeFileSync } from 'fs'
 import { config as loadDotenv } from 'dotenv'
+import { createInterface } from 'readline/promises'
+import { Writable } from 'stream'
+import { resetPanelPassword } from '@zakobot/shared/panel-auth'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
@@ -39,7 +42,17 @@ program
   .description('Start both core and panel')
   .action(cmdStart)
 
-program.parse()
+program
+  .command('reset-password')
+  .description('Reset the web panel password')
+  .option('--password-stdin', 'Read the new password from standard input')
+  .action(cmdResetPassword)
+
+program.parseAsync().catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error)
+  console.error(`Error: ${message}`)
+  process.exitCode = 1
+})
 
 // ─── commands ────────────────────────────────────────────────────────────────
 
@@ -76,6 +89,22 @@ function cmdStart(): void {
   process.on('SIGTERM', shutdown)
 }
 
+async function cmdResetPassword(options: { passwordStdin?: boolean }): Promise<void> {
+  const nextPassword = options.passwordStdin
+    ? await readPasswordFromStdin()
+    : await promptForNewPassword()
+
+  if (nextPassword.length < 6) {
+    throw new Error('Password must be at least 6 characters long')
+  }
+
+  const home = zakobotHome()
+  resetPanelPassword(nextPassword, home)
+
+  console.log(`Panel password reset for ${home}`)
+  console.log('Existing panel sessions have been signed out.')
+}
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function zakobotHome() {
@@ -101,6 +130,70 @@ function loadEnvFile(path: string) {
     path,
     override: false,
   })
+}
+
+async function promptForNewPassword(): Promise<string> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error('Interactive password input requires a terminal; pipe a password with --password-stdin instead')
+  }
+
+  const password = await readHiddenPassword('New password: ')
+  const confirmation = await readHiddenPassword('Confirm new password: ')
+
+  if (password !== confirmation) {
+    throw new Error('Passwords do not match')
+  }
+
+  return password
+}
+
+async function readHiddenPassword(prompt: string): Promise<string> {
+  process.stdout.write(prompt)
+
+  const mutedOutput = new Writable({
+    write(_chunk, _encoding, callback) {
+      callback()
+    },
+  })
+  const readline = createInterface({
+    input: process.stdin,
+    output: mutedOutput,
+    terminal: true,
+  })
+
+  try {
+    return await readline.question('')
+  }
+  finally {
+    readline.close()
+    process.stdout.write('\n')
+  }
+}
+
+async function readPasswordFromStdin(): Promise<string> {
+  if (process.stdin.isTTY) {
+    throw new Error('--password-stdin expects piped input')
+  }
+
+  let password = ''
+  process.stdin.setEncoding('utf8')
+
+  for await (const chunk of process.stdin) {
+    password += chunk
+  }
+
+  if (password.endsWith('\r\n')) {
+    password = password.slice(0, -2)
+  }
+  else if (password.endsWith('\n')) {
+    password = password.slice(0, -1)
+  }
+
+  if (password.includes('\n') || password.includes('\r')) {
+    throw new Error('--password-stdin accepts exactly one line')
+  }
+
+  return password
 }
 
 function resolveEntry(pkgName: 'core' | 'panel'): string {
